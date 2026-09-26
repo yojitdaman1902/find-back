@@ -196,7 +196,7 @@ function localReportById(reportId: string) {
 }
 
 const demoVerificationClues: Record<string, OwnershipClue[]> = {
-  "lost-backpack": [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }],
+  "catalog-backpack": [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }],
 };
 
 export async function loadOwnershipQuestions(foundReportId: string, lostReportId: string): Promise<OwnershipQuestion[]> {
@@ -222,7 +222,7 @@ export async function verifyFoundOwnership(foundReportId: string, lostReportId: 
     if (error || !data) return { verified: false, locked: false, attemptsRemaining: 0 };
     return { verified: Boolean(data.verified), locked: Boolean(data.locked), attemptsRemaining: Number(data.attempts_remaining ?? 0), verificationId: data.verification_id ?? undefined };
   }
-  const clues = demoVerificationClues[lostReportId] ?? localReportById(lostReportId)?.ownershipVerification ?? [];
+  const clues = demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? [];
   const result = verifyOwnership(clues, answers);
   return { verified: result.verified, locked: false, attemptsRemaining: result.verified ? OWNERSHIP_MAX_ATTEMPTS : Math.max(0, OWNERSHIP_MAX_ATTEMPTS - 1), verificationId: result.verified ? `demo-verification-${foundReportId}-${lostReportId}` : undefined };
 }
@@ -399,7 +399,7 @@ export async function saveReport(report: ItemReport) {
     const { data: inserted, error: insertError } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: savedReport.publicDescription, finder_first_name: savedReport.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: statusToDb(status) }).select("id").single();
     if (insertError || !inserted?.id) throw insertError ?? new Error("Could not save listing");
     persistedReport = { ...savedReport, id: inserted.id };
-    if (report.type === "lost" && savedReport.ownershipVerification?.length) {
+    if (report.type === "found" && savedReport.ownershipVerification?.length) {
       const { error: clueError } = await supabase.from("ownership_verification_clues").insert(savedReport.ownershipVerification.slice(0, 5).map((clue, position) => ({ report_id: inserted.id, owner_user_id: data.session.user.id, question: clue.question, answer: clue.answer, position })));
       if (clueError) throw clueError;
     }
@@ -433,7 +433,7 @@ export async function updateReport(report: ItemReport, previousReport: ItemRepor
   const updatedReport = { ...report, status: nextStatus, publicDescription: report.type === "found" ? getPublicFoundDescription(report) : report.publicDescription };
 
   if (data.session?.user && isUuid(report.id)) {
-    const clues = report.type === "lost" && report.ownershipVerification && report.ownershipVerification.length >= 2 ? report.ownershipVerification.slice(0, 5).map((clue) => ({ question: clue.question.trim(), answer: clue.answer.trim() })) : null;
+    const clues = report.type === "found" && report.ownershipVerification && report.ownershipVerification.length >= 2 ? report.ownershipVerification.slice(0, 5).map((clue) => ({ question: clue.question.trim(), answer: clue.answer.trim() })) : null;
     const { data: saved, error } = await supabase.rpc("update_owned_report", { target_report_id: report.id, listing: { item_name: report.itemName, category: report.category, brand: report.brand ?? "", color: report.color, description: report.description, public_description: updatedReport.publicDescription ?? "", location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: statusToDb(nextStatus) }, clues });
     const savedRow = Array.isArray(saved) ? saved[0] : saved;
     if (error || !savedRow) throw error ?? new Error("Could not update listing");
@@ -443,7 +443,7 @@ export async function updateReport(report: ItemReport, previousReport: ItemRepor
   const reports = getReports(storageKey, !data.session?.user);
   const nextReports = reports.map((item) => item.id === report.id ? updatedReport : item);
   saveReports(nextReports, storageKey);
-  if (report.type === "lost" && report.ownershipVerification && report.ownershipVerification.length >= 2) await saveOwnershipQuestions(report.id, report.ownershipVerification);
+  if (report.type === "found" && report.ownershipVerification && report.ownershipVerification.length >= 2) await saveOwnershipQuestions(report.id, report.ownershipVerification);
   return updatedReport;
 }
 

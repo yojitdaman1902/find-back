@@ -28,6 +28,10 @@ test("publish a found report to the catalog", async ({ page }) => {
   await page.getByLabel("Description *").fill("Compact coral umbrella with a curved handle.");
   await page.getByLabel("Date *").fill("2025-09-26");
   await page.getByLabel("Approximate time *").fill("14:20");
+  await page.getByRole("textbox", { name: "Question *" }).nth(0).fill("What colour was the umbrella handle?");
+  await page.getByRole("textbox", { name: "Expected answer *" }).nth(0).fill("Coral");
+  await page.getByRole("textbox", { name: "Question *" }).nth(1).fill("Where was the umbrella last seen?");
+  await page.getByRole("textbox", { name: "Expected answer *" }).nth(1).fill("Library east entrance");
   await page.getByRole("button", { name: "Submit found report" }).click();
 
   await page.goto("/found-items");

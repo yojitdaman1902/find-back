@@ -75,10 +75,10 @@ export default function Report() {
     }
   };
   const validBasics = form.itemName && form.color && form.description && form.location && form.date && form.time;
-  const shouldValidateClues = reportType === "lost";
+  const shouldValidateClues = reportType === "found";
   const validClues = privateClues.length >= 2 && privateClues.length <= 5 && privateClues.every((clue) => clue.question.trim() && clue.answer.trim());
   const valid = validBasics && (!shouldValidateClues || validClues);
-  const showPrivateClueFields = reportType === "lost";
+  const showPrivateClueFields = reportType === "found";
   const showExistingState = isEdit && isLoading && !existingReport;
   if (isEdit && !isLoading && !existingReport) return <AppShell><div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-8"><h1 className="text-3xl font-semibold text-white">Listing not found</h1><p className="mt-3 text-slate-400">This listing may have been deleted or belongs to another account.</p><button onClick={() => navigate("/dashboard")} className="mt-7 rounded-full bg-[#5b8cff] px-5 py-3 text-sm font-semibold text-white">Back to My Activity</button></div></AppShell>;
   if (showExistingState) return <AppShell><div className="mx-auto max-w-3xl px-5 py-24 text-center text-slate-400">Loading your listing…</div></AppShell>;

@@ -20,6 +20,12 @@ test("lost report actions do not include ownership-question editing", async ({ p
   await expect(page.getByRole("button", { name: "Delete Listing" })).toBeVisible();
 });
 
+test("found report actions include ownership-question editing", async ({ page }) => {
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Actions for Midnight AirPods Case" }).click();
+  await expect(page.getByRole("link", { name: "Ownership Check" })).toBeVisible();
+});
+
 test("delete listing from My Activity removes it after refresh", async ({ page }) => {
   await page.goto("/dashboard");
   await expect(page.getByText("Midnight AirPods Case", { exact: true })).toBeVisible();

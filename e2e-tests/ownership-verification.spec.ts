@@ -35,17 +35,23 @@ test("incorrect ownership answers are rejected without revealing individual resu
   await expect(page.getByText("Ownership Verified")).not.toBeVisible();
 });
 
- test("lost report ownership questions are not exposed as a My Activity action", async ({ page }) => {
+test("lost reports do not show private-question editing", async ({ page }) => {
+  await page.goto("/report/lost");
+  await expect(page.getByRole("heading", { name: "Finder Verification Questions" })).not.toBeVisible();
+  await expect(page.getByText("Verify Ownership")).not.toBeVisible();
+});
+
+test("found reports show the finder verification-question editor", async ({ page }) => {
+  await page.goto("/report/found");
+  await expect(page.getByRole("heading", { name: "Finder Verification Questions" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Question *" }).nth(0)).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Expected answer *" }).nth(1)).toBeVisible();
+});
+
+test("lost report actions omit ownership-question editing", async ({ page }) => {
   await page.goto("/dashboard");
   await page.getByRole("button", { name: "Actions for Black Nike Backpack" }).click();
   await expect(page.getByRole("button", { name: "Ownership Check" })).not.toBeVisible();
   await expect(page.getByRole("link", { name: "Edit Listing" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Delete Listing" })).toBeVisible();
-});
-
- test("lost reports keep private matching details out of the ownership-check UI", async ({ page }) => {
-  await page.goto("/report/lost");
-  await expect(page.getByRole("heading", { name: "Private matching details" })).toBeVisible();
-  await expect(page.getByText("These details stay private and are used only when a matching found item reaches the secure ownership check.")).toBeVisible();
-  await expect(page.getByText("Verify Ownership")).not.toBeVisible();
 });
