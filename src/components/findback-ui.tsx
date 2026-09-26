@@ -4,7 +4,7 @@ import { ArrowRight, Bell, Check, ChevronRight, Compass, LayoutDashboard, LogIn,
 import { cn } from "@/lib/utils";
 import { useSessionContext } from "@/components/SessionContextProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { getActiveMatches, getLatestReport } from "@/lib/findback-data";
+import { useFindBackData } from "@/components/FindBackDataProvider";
 
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
@@ -24,10 +24,11 @@ function getInitials(email?: string) {
 
 function NotificationCenter({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
-  const report = getLatestReport();
-  const match = getActiveMatches()[0];
+  const { reports, matches } = useFindBackData();
+  const report = reports[0];
+  const match = matches[0];
   const notifications = [
-    { title: `${match.score}% match found`, body: `${match.itemName} may be connected to your latest report.`, time: "Just now", href: `/matches/${match.id}` },
+    match ? { title: `${match.score}% match found`, body: `${match.itemName} may be connected to your latest report.`, time: "Just now", href: `/matches/${match.id}` } : { title: "No new matches yet", body: "Submit a lost or found report and FindBack will start comparing it.", time: "Now", href: "/report/lost" },
     { title: "Safety check complete", body: "Finder contact details remain protected until you verify ownership.", time: "Today", href: "/dashboard#safety" },
     { title: "Community pulse", body: `${report?.type === "found" ? "Your found report is now visible to nearby matches." : "Your report is being compared across campus."}`, time: "Today", href: "/dashboard" },
   ];

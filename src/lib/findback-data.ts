@@ -148,17 +148,36 @@ const demoReports: ItemReport[] = [
   },
 ];
 
-export function getReports(): ItemReport[] {
-  const stored = localStorage.getItem("findback-reports");
+export function getReports(storageKey = "findback-reports", seedDemo = true): ItemReport[] {
+  const stored = localStorage.getItem(storageKey);
   if (!stored) {
-    localStorage.setItem("findback-reports", JSON.stringify(demoReports));
-    return demoReports;
+    if (seedDemo) localStorage.setItem(storageKey, JSON.stringify(demoReports));
+    return seedDemo ? demoReports : [];
   }
   return JSON.parse(stored) as ItemReport[];
 }
 
-export function saveReports(reports: ItemReport[]) {
-  localStorage.setItem("findback-reports", JSON.stringify(reports));
+export function saveReports(reports: ItemReport[], storageKey = "findback-reports") {
+  localStorage.setItem(storageKey, JSON.stringify(reports));
+}
+
+export async function loadReportsForUser(userId: string): Promise<ItemReport[]> {
+  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, location, reported_date, reported_time, images, status, created_at").eq("user_id", userId).order("created_at", { ascending: false });
+  if (error || !data) return getReports(`findback-reports-${userId}`, false);
+  return data.map((row) => ({
+    id: row.id,
+    type: row.report_type as ReportType,
+    itemName: row.item_name,
+    category: row.category,
+    brand: row.brand ?? undefined,
+    color: row.color,
+    description: row.description,
+    location: row.location,
+    date: row.reported_date,
+    time: row.reported_time,
+    images: Array.isArray(row.images) ? row.images as string[] : [],
+    status: row.status === "potential_match" ? "Potential Match" : row.status === "verified" ? "Verified" : row.status === "recovered" ? "Recovered" : "Reported",
+  }));
 }
 
 const synonymGroups = [
@@ -228,30 +247,31 @@ function buildDynamicMatch(target: ItemReport, candidate: ItemReport): Match {
   };
 }
 
-export function getActiveMatches() {
-  const userReports = getReports().filter((report) => report.id.startsWith("report-"));
-  const target = userReports[0];
+export function getActiveMatches(reports?: ItemReport[]) {
+  const sourceReports = reports ?? getReports().filter((report) => report.id.startsWith("report-"));
+  const target = sourceReports[0];
   if (!target) return demoMatches;
-  const dynamicMatches = userReports
+  const dynamicMatches = sourceReports
     .filter((report) => report.id !== target.id && report.type !== target.type)
     .map((report) => buildDynamicMatch(target, report))
     .sort((left, right) => right.score - left.score);
   return dynamicMatches.length ? [...dynamicMatches, ...demoMatches].slice(0, 3) : demoMatches;
 }
 
-export function getMatchById(id: string) {
-  return getActiveMatches().find((match) => match.id === id) ?? demoMatches.find((match) => match.id === id) ?? demoMatches[0];
+export function getMatchById(id: string, reports?: ItemReport[]) {
+  return getActiveMatches(reports).find((match) => match.id === id) ?? demoMatches.find((match) => match.id === id) ?? demoMatches[0];
 }
 
 export async function saveReport(report: ItemReport) {
-  const reports = getReports();
-  const oppositeUserReports = reports.filter((existing) => existing.id.startsWith("report-") && existing.type !== report.type);
-  const savedReport = { ...report, status: oppositeUserReports.length ? "Potential Match" as ReportStatus : report.status };
-  const updatedReports = [savedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: "Potential Match" as ReportStatus } : existing)];
-  saveReports(updatedReports);
   const { data } = await supabase.auth.getSession();
+  const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
+  const reports = getReports(storageKey, !data.session?.user);
+  const oppositeUserReports = reports.filter((existing) => existing.type !== report.type);
+  const status = oppositeUserReports.length ? "Potential Match" as ReportStatus : report.status;
+  let savedReport = { ...report, status };
+
   if (data.session?.user) {
-    await supabase.from("reports").insert({
+    const { data: inserted } = await supabase.from("reports").insert({
       user_id: data.session.user.id,
       report_type: report.type,
       item_name: report.itemName,
@@ -260,17 +280,30 @@ export async function saveReport(report: ItemReport) {
       color: report.color,
       description: report.description,
       location: report.location,
-      reported_date: new Date().toISOString().slice(0, 10),
+      reported_date: report.date,
       reported_time: report.time,
       images: report.images,
-      status: savedReport.status.toLowerCase().replace(" ", "_"),
-    });
+      status: status.toLowerCase().replace(" ", "_"),
+    }).select("id").single();
+    if (inserted?.id) savedReport = { ...savedReport, id: inserted.id };
+    const existingIds = oppositeUserReports.map((existing) => existing.id).filter((id) => !id.startsWith("report-"));
+    if (existingIds.length) {
+      await supabase.from("reports").update({ status: "potential_match" }).in("id", existingIds).eq("user_id", data.session.user.id);
+    }
   }
+
+  const updatedReports = [savedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: "Potential Match" as ReportStatus } : existing)];
+  saveReports(updatedReports, storageKey);
 }
 
-export function updateReportStatus(id: string, status: ReportStatus) {
-  const reports = getReports().map((report) => report.id === id ? { ...report, status } : report);
-  saveReports(reports);
+export async function updateReportStatus(id: string, status: ReportStatus) {
+  const { data } = await supabase.auth.getSession();
+  const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
+  const reports = getReports(storageKey, !data.session?.user).map((report) => report.id === id ? { ...report, status } : report);
+  saveReports(reports, storageKey);
+  if (data.session?.user) {
+    await supabase.from("reports").update({ status: status.toLowerCase().replace(" ", "_") }).eq("id", id).eq("user_id", data.session.user.id);
+  }
 }
 
 export function getLatestReport() {
