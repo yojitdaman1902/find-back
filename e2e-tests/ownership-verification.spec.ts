@@ -43,8 +43,9 @@ test("incorrect ownership answers are rejected without revealing individual resu
   await expect(page.getByRole("button", { name: "Delete Listing" })).toBeVisible();
 });
 
- test("lost reports keep private ownership questions in the report form", async ({ page }) => {
+ test("lost reports keep private matching details out of the ownership-check UI", async ({ page }) => {
   await page.goto("/report/lost");
-  await expect(page.getByRole("heading", { name: "Private Ownership Details" })).toBeVisible();
-  await expect(page.getByText("These details are kept private and will only be used to verify ownership if your item is found.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Private matching details" })).toBeVisible();
+  await expect(page.getByText("These details stay private and are used only when a matching found item reaches the secure ownership check.")).toBeVisible();
+  await expect(page.getByText("Verify Ownership")).not.toBeVisible();
 });

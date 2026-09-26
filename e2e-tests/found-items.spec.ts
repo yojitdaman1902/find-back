@@ -13,7 +13,7 @@ test("browse, search, and open a found item", async ({ page }) => {
 
   await page.getByRole("button", { name: "View details for Black Nike Backpack" }).click();
   await expect(page.getByRole("dialog", { name: "Black Nike Backpack details" })).toBeVisible();
-  await expect(page.getByText("Privacy-first ownership checks")).toBeVisible();
+  await expect(page.getByText("Ownership Check")).toBeVisible();
   await page.getByRole("button", { name: "Prove This Is Mine" }).click();
   await expect(page).toHaveURL(/\/verify-ownership\/catalog-backpack$/);
   await expect(page.getByRole("heading", { name: /Prove this is your Black Nike Backpack/ })).toBeVisible();
