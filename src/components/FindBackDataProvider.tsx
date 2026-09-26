@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { demoFoundReports, getActiveMatches, getReports, loadMatchFeatures, loadReportsForUser, type ItemReport, type Match } from "@/lib/findback-data";
+import { demoFoundReports, getActiveMatches, getPotentialMatchCount, getReports, loadMatchFeatures, loadReportsForUser, type ItemReport, type Match } from "@/lib/findback-data";
 import { useSessionContext } from "@/components/SessionContextProvider";
 
 type FindBackData = {
@@ -49,7 +49,12 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
         const { data: existingReports } = await supabase.from("reports").select("id").eq("user_id", session.user.id).limit(1);
         const anonymousReports = getReports().filter((report) => report.id.startsWith("report-"));
         if (!existingReports?.length && anonymousReports.length) {
-          await supabase.from("reports").insert(anonymousReports.map((report) => ({ user_id: session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: report.publicDescription, finder_first_name: report.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: report.status.toLowerCase().replace(" ", "_") })));
+          for (const report of anonymousReports) {
+            const { data: inserted } = await supabase.from("reports").insert({ user_id: session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: report.publicDescription, finder_first_name: report.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: report.status.toLowerCase().replace(/\s+/g, "_") }).select("id").single();
+            if (inserted?.id && report.ownershipVerification?.length) {
+              await supabase.from("ownership_verification_clues").insert(report.ownershipVerification.slice(0, 4).map((clue, position) => ({ report_id: inserted.id, owner_user_id: session.user.id, question: clue.question, answer: clue.answer, position })));
+            }
+          }
         }
         if (!profile) {
           await supabase.from("profiles").upsert({ id: session.user.id, display_name: derivedName, updated_at: new Date().toISOString() });
@@ -91,7 +96,8 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
     };
   }, [userId]);
 
-  const value = useMemo(() => ({ reports, sharedReports: matchReports, matches: session?.user ? (reports.length ? getActiveMatches(reports, matchReports) : []) : getActiveMatches(reports, matchReports), profileName, isLoading, refreshReports }), [reports, matchReports, profileName, isLoading, userId, session?.user]);
+  const displayReports = useMemo(() => reports.map((report) => report.type === "lost" && report.status === "Reported" && getPotentialMatchCount(report, matchReports) > 0 ? { ...report, status: "Ownership Verification Pending" as const } : report), [reports, matchReports]);
+  const value = useMemo(() => ({ reports: displayReports, sharedReports: matchReports, matches: session?.user ? (displayReports.length ? getActiveMatches(displayReports, matchReports) : []) : getActiveMatches(displayReports, matchReports), profileName, isLoading, refreshReports }), [displayReports, matchReports, profileName, isLoading, userId, session?.user]);
   return <FindBackDataContext.Provider value={value}>{children}</FindBackDataContext.Provider>;
 }
 

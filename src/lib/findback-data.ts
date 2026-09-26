@@ -1,7 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type ReportType = "lost" | "found";
-export type ReportStatus = "Reported" | "Potential Match" | "Verified" | "Recovered";
+export type ReportStatus = "Reported" | "Potential Match" | "Ownership Verification Pending" | "Verified" | "Ownership Verified" | "Recovered";
+
+export type OwnershipClue = {
+  question: string;
+  answer: string;
+};
 
 export type ItemReport = {
   id: string;
@@ -16,6 +21,7 @@ export type ItemReport = {
   time: string;
   images: string[];
   status: ReportStatus;
+  ownershipVerification?: OwnershipClue[];
   publicDescription?: string;
   finderFirstName?: string;
 };
@@ -32,6 +38,7 @@ export type Match = {
   explanation: string;
   factors: { label: string; value: number }[];
   reasoning: string;
+  finderFirstName?: string;
   targetReportId?: string;
   candidateReportId?: string;
 };
@@ -56,7 +63,8 @@ export const demoMatches: Match[] = [
     type: "found",
     explanation: "Same color and brand cues, with a red keychain mentioned in both descriptions.",
     factors: [{ label: "Item type", value: 100 }, { label: "Colour", value: 95 }, { label: "Location", value: 100 }, { label: "Time proximity", value: 87 }, { label: "Description", value: 91 }, { label: "Image similarity", value: 89 }],
-    reasoning: "Both reports describe a black backpack found in the Library building within 30 minutes of the reported loss. Both descriptions mention a red keychain and a laptop charger.",
+    reasoning: "Both reports describe a black backpack found in the Library building within 30 minutes of the reported loss. The AI signal is strong, but private clues are still required before contact is unlocked.",
+    finderFirstName: "Jordan",
   },
   {
     id: "match-earbuds",
@@ -87,7 +95,7 @@ export const demoMatches: Match[] = [
 ];
 
 const demoReports: ItemReport[] = [
-  { id: "lost-backpack", type: "lost", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with a red keychain and a laptop charger inside.", location: "Library — 2nd Floor", date: "25 Sept", time: "3:15 PM", images: [itemImages.backpack], status: "Potential Match" },
+  { id: "lost-backpack", type: "lost", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with a red keychain and a laptop charger inside.", location: "Library — 2nd Floor", date: "25 Sept", time: "3:15 PM", images: [itemImages.backpack], status: "Ownership Verification Pending", ownershipVerification: [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }] },
   { id: "found-earbuds", type: "found", itemName: "Midnight AirPods Case", category: "Electronics", color: "Midnight blue", description: "Small wireless earbuds case found beside the charging station.", location: "Student Union — Atrium", date: "24 Sept", time: "12:18 PM", images: [itemImages.earbuds], status: "Reported" },
   { id: "found-notebook", type: "found", itemName: "Navy Lecture Notebook", category: "Books", color: "Navy", description: "Navy notebook with handwritten economics notes and a silver elastic.", location: "Science Hall — Room 204", date: "23 Sept", time: "5:06 PM", images: [itemImages.notebook], status: "Recovered" },
 ];
@@ -131,7 +139,7 @@ function mapReportRow(row: any, id = row.id): ItemReport {
     date: row.reported_date,
     time: row.reported_time,
     images: Array.isArray(row.images) ? row.images as string[] : [],
-    status: row.status === "potential_match" ? "Potential Match" : row.status === "verified" ? "Verified" : row.status === "recovered" ? "Recovered" : "Reported",
+    status: row.status === "potential_match" ? "Potential Match" : row.status === "ownership_verification_pending" ? "Ownership Verification Pending" : row.status === "ownership_verified" ? "Ownership Verified" : row.status === "verified" ? "Verified" : row.status === "recovered" ? "Recovered" : "Reported",
     publicDescription: row.public_description ?? undefined,
     finderFirstName: row.finder_first_name ?? undefined,
   };
@@ -140,7 +148,14 @@ function mapReportRow(row: any, id = row.id): ItemReport {
 export async function loadReportsForUser(userId: string): Promise<ItemReport[]> {
   const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, created_at").eq("user_id", userId).order("created_at", { ascending: false });
   if (error || !data) return getReports(`findback-reports-${userId}`, false);
-  return data.map((row) => mapReportRow(row));
+  const { data: clueRows } = await supabase.from("ownership_verification_clues").select("report_id, question, answer, position").eq("owner_user_id", userId).order("position", { ascending: true });
+  const cluesByReport = new Map<string, OwnershipClue[]>();
+  (clueRows ?? []).forEach((row) => {
+    const clues = cluesByReport.get(row.report_id) ?? [];
+    clues.push({ question: row.question, answer: row.answer });
+    cluesByReport.set(row.report_id, clues);
+  });
+  return data.map((row) => ({ ...mapReportRow(row), ownershipVerification: cluesByReport.get(row.id) ?? [] }));
 }
 
 export async function loadMatchFeatures(): Promise<ItemReport[]> {
@@ -197,6 +212,7 @@ function buildDynamicMatch(target: ItemReport, candidate: ItemReport): Match {
     explanation: `${matchLabel}: ${candidate.itemName} shares ${target.category.toLowerCase()} signals, descriptive clues, and nearby report context.`,
     factors: [{ label: "Item type", value: category }, { label: "Colour", value: color }, { label: "Location", value: location }, { label: "Time proximity", value: time }, { label: "Description", value: description }, { label: "Image similarity", value: image }],
     reasoning: `Both reports describe a ${target.color.toLowerCase()} ${target.category.toLowerCase()} and share semantic clues across their item names and descriptions. The reports were made around ${candidate.location}, so FindBack ranked this as a ${matchLabel.toLowerCase()}.`,
+    finderFirstName: candidate.finderFirstName,
     targetReportId: target.id,
     candidateReportId: candidate.id,
   };
@@ -227,23 +243,76 @@ export function getPublicFoundDescription(report: ItemReport) {
   return `${publicLabel} found near ${report.location.split("—")[0].trim()}.`;
 }
 
+export const OWNERSHIP_MAX_ATTEMPTS = 3;
+
+export function normalizeVerificationAnswer(value: string) {
+  return value.toLowerCase().replace(/\+/g, " and ").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function editDistance(left: string, right: string) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(current[rightIndex - 1] + 1, previous[rightIndex] + 1, previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1));
+    }
+    for (let index = 0; index < current.length; index += 1) previous[index] = current[index];
+  }
+  return previous[right.length];
+}
+
+function answersMatch(expected: string, actual: string) {
+  const normalizedExpected = normalizeVerificationAnswer(expected);
+  const normalizedActual = normalizeVerificationAnswer(actual);
+  if (!normalizedExpected || !normalizedActual) return false;
+  if (normalizedExpected === normalizedActual) return true;
+  const expectedTokens = new Set(normalizedExpected.split(" "));
+  const actualTokens = new Set(normalizedActual.split(" "));
+  const overlap = [...expectedTokens].filter((token) => actualTokens.has(token)).length;
+  const tokenCoverage = overlap / Math.max(expectedTokens.size, actualTokens.size);
+  const compactExpected = normalizedExpected.replace(/ /g, "");
+  const compactActual = normalizedActual.replace(/ /g, "");
+  const distance = editDistance(compactExpected, compactActual);
+  const similarity = 1 - distance / Math.max(compactExpected.length, compactActual.length);
+  return tokenCoverage >= 0.75 || (Math.min(compactExpected.length, compactActual.length) >= 5 && similarity >= 0.9);
+}
+
+export function verifyOwnership(clues: OwnershipClue[], answers: string[]) {
+  const required = Math.max(2, Math.ceil(clues.length * 0.75));
+  const correct = clues.reduce((total, clue, index) => total + (answersMatch(clue.answer, answers[index] ?? "") ? 1 : 0), 0);
+  return { correct, total: clues.length, required, verified: clues.length >= 2 && correct >= required };
+}
+
+function statusToDb(status: ReportStatus) {
+  return status.toLowerCase().replace(/\s+/g, "_");
+}
+
 export async function saveReport(report: ItemReport) {
   const { data } = await supabase.auth.getSession();
   const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
   const reports = getReports(storageKey, !data.session?.user);
-  const oppositeUserReports = reports.filter((existing) => existing.type !== report.type);
-  const status = oppositeUserReports.length ? "Potential Match" as ReportStatus : report.status;
-  const savedReport = { ...report, status, publicDescription: report.type === "found" ? getPublicFoundDescription(report) : report.publicDescription };
+  const sharedReports = data.session?.user ? await loadMatchFeatures() : [];
+  const oppositeUserReports = [...reports, ...sharedReports].filter((existing, index, all) => existing.type !== report.type && all.findIndex((candidate) => candidate.id === existing.id) === index);
+  const status = oppositeUserReports.length && report.type === "lost" ? "Ownership Verification Pending" as ReportStatus : oppositeUserReports.length ? "Potential Match" as ReportStatus : report.status;
+  let finderFirstName = report.finderFirstName;
+  if (report.type === "found" && data.session?.user && !finderFirstName) {
+    const { data: profile } = await supabase.from("profiles").select("first_name, display_name").eq("id", data.session.user.id).maybeSingle();
+    finderFirstName = profile?.first_name || profile?.display_name?.split(/\s+/)[0] || data.session.user.user_metadata?.full_name?.split(/\s+/)[0];
+  }
+  const savedReport = { ...report, status, finderFirstName, publicDescription: report.type === "found" ? getPublicFoundDescription(report) : report.publicDescription };
   let persistedReport = savedReport;
 
   if (data.session?.user) {
-    const { data: inserted } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: savedReport.publicDescription, finder_first_name: savedReport.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: status.toLowerCase().replace(" ", "_") }).select("id").single();
+    const { data: inserted } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: savedReport.publicDescription, finder_first_name: savedReport.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: statusToDb(status) }).select("id").single();
     if (inserted?.id) persistedReport = { ...savedReport, id: inserted.id };
+    if (savedReport.ownershipVerification?.length && inserted?.id) {
+      await supabase.from("ownership_verification_clues").insert(savedReport.ownershipVerification.slice(0, 4).map((clue, position) => ({ report_id: inserted.id, owner_user_id: data.session.user.id, question: clue.question, answer: clue.answer, position })));
+    }
     const existingIds = oppositeUserReports.map((existing) => existing.id).filter((id) => !id.startsWith("report-"));
-    if (existingIds.length) await supabase.from("reports").update({ status: "potential_match" }).in("id", existingIds).eq("user_id", data.session.user.id);
+    if (existingIds.length) await supabase.from("reports").update({ status: report.type === "found" ? "ownership_verification_pending" : "potential_match" }).in("id", existingIds).eq("user_id", data.session.user.id);
   }
 
-  const updatedReports = [persistedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: "Potential Match" as ReportStatus } : existing)];
+  const updatedReports = [persistedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: existing.type === "lost" ? "Ownership Verification Pending" as ReportStatus : "Potential Match" as ReportStatus } : existing)];
   saveReports(updatedReports, storageKey);
 }
 
@@ -252,7 +321,7 @@ export async function updateReportStatus(id: string, status: ReportStatus) {
   const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
   const reports = getReports(storageKey, !data.session?.user).map((report) => report.id === id ? { ...report, status } : report);
   saveReports(reports, storageKey);
-  if (data.session?.user) await supabase.from("reports").update({ status: status.toLowerCase().replace(" ", "_") }).eq("id", id).eq("user_id", data.session.user.id);
+  if (data.session?.user) await supabase.from("reports").update({ status: statusToDb(status) }).eq("id", id).eq("user_id", data.session.user.id);
 }
 
 export function getLatestReport() {

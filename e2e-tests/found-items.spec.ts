@@ -30,5 +30,5 @@ test("publish a found report to the catalog", async ({ page }) => {
   await page.goto("/found-items");
   await page.getByPlaceholder("Search found items…").fill("Coral Campus Umbrella");
   await expect(page.getByRole("heading", { name: "Coral Campus Umbrella" })).toBeVisible();
-  await expect(page.getByText("Coral umbrella found near Library.")).toBeVisible();
+  await expect(page.getByText("Coral Campus Umbrella found near Library.")).toBeVisible();
 });
