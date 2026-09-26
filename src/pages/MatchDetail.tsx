@@ -60,7 +60,7 @@ export default function MatchDetail() {
 
   useEffect(() => {
     if (!foundReportId) return;
-    loadOwnershipQuestions(foundReportId).then(setQuestions);
+    if (lost?.id) loadOwnershipQuestions(foundReportId, lost.id).then(setQuestions);
     if (lost?.id) loadOwnershipVerification(foundReportId, lost.id).then((verification) => { if (verification?.id) { setVerificationId(verification.id); setVerified(true); } });
   }, [foundReportId, lost?.id]);
   useEffect(() => { setRecovered(lost?.status === "Recovered"); }, [lost]);

@@ -196,15 +196,16 @@ function localReportById(reportId: string) {
 }
 
 const demoVerificationClues: Record<string, OwnershipClue[]> = {
-  "catalog-backpack": [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }],
+  "lost-backpack": [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }],
 };
 
-export async function loadOwnershipQuestions(foundReportId: string): Promise<OwnershipQuestion[]> {
-  if (isUuid(foundReportId)) {
-    const { data, error } = await supabase.rpc("get_ownership_questions", { target_report_id: foundReportId });
-    if (!error && data) return data.map((row: { clue_position: number; question: string }) => ({ position: row.clue_position, question: row.question }));
+export async function loadOwnershipQuestions(foundReportId: string, lostReportId: string): Promise<OwnershipQuestion[]> {
+  if (isUuid(foundReportId) && isUuid(lostReportId)) {
+    const { data, error } = await supabase.rpc("get_ownership_questions", { target_found_report_id: foundReportId, target_lost_report_id: lostReportId });
+    if (error || !data) return [];
+    return data.map((row: { clue_position: number; question: string }) => ({ position: row.clue_position, question: row.question }));
   }
-  return (demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? []).map((clue, position) => ({ position, question: clue.question }));
+  return (demoVerificationClues[lostReportId] ?? localReportById(lostReportId)?.ownershipVerification ?? []).map((clue, position) => ({ position, question: clue.question }));
 }
 
 export async function loadOwnershipVerification(foundReportId: string, lostReportId: string) {
@@ -218,9 +219,10 @@ export async function loadOwnershipVerification(foundReportId: string, lostRepor
 export async function verifyFoundOwnership(foundReportId: string, lostReportId: string, answers: string[]): Promise<OwnershipVerificationResult> {
   if (isUuid(foundReportId) && isUuid(lostReportId)) {
     const { data, error } = await supabase.rpc("verify_found_ownership", { target_found_report_id: foundReportId, target_lost_report_id: lostReportId, submitted_answers: answers });
-    if (!error && data) return { verified: Boolean(data.verified), locked: Boolean(data.locked), attemptsRemaining: Number(data.attempts_remaining ?? 0), verificationId: data.verification_id ?? undefined };
+    if (error || !data) return { verified: false, locked: false, attemptsRemaining: 0 };
+    return { verified: Boolean(data.verified), locked: Boolean(data.locked), attemptsRemaining: Number(data.attempts_remaining ?? 0), verificationId: data.verification_id ?? undefined };
   }
-  const clues = demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? [];
+  const clues = demoVerificationClues[lostReportId] ?? localReportById(lostReportId)?.ownershipVerification ?? [];
   const result = verifyOwnership(clues, answers);
   return { verified: result.verified, locked: false, attemptsRemaining: result.verified ? OWNERSHIP_MAX_ATTEMPTS : Math.max(0, OWNERSHIP_MAX_ATTEMPTS - 1), verificationId: result.verified ? `demo-verification-${foundReportId}-${lostReportId}` : undefined };
 }
@@ -322,6 +324,10 @@ export function getPotentialMatchCount(report: ItemReport, candidates: ItemRepor
   return candidates.filter((candidate) => candidate.id !== report.id && candidate.type !== report.type).map((candidate) => buildDynamicMatch(report, candidate)).filter((match) => match.score >= 60).length;
 }
 
+export function getBestLostMatchForFound(foundReport: ItemReport, lostReports: ItemReport[]) {
+  return lostReports.filter((report) => report.type === "lost").map((report) => buildDynamicMatch(report, foundReport)).sort((left, right) => right.score - left.score)[0];
+}
+
 export function getPublicFoundDescription(report: ItemReport) {
   if (report.publicDescription) return report.publicDescription;
   const descriptor = (report.itemName || report.category).trim();
@@ -365,7 +371,7 @@ function answersMatch(expected: string, actual: string) {
 }
 
 export function verifyOwnership(clues: OwnershipClue[], answers: string[]) {
-  const required = Math.max(2, Math.ceil(clues.length * 0.75));
+  const required = Math.max(2, Math.ceil(clues.length * 2 / 3));
   const correct = clues.reduce((total, clue, index) => total + (answersMatch(clue.answer, answers[index] ?? "") ? 1 : 0), 0);
   return { correct, total: clues.length, required, verified: clues.length >= 2 && correct >= required };
 }
@@ -390,10 +396,12 @@ export async function saveReport(report: ItemReport) {
   let persistedReport = savedReport;
 
   if (data.session?.user) {
-    const { data: inserted } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: savedReport.publicDescription, finder_first_name: savedReport.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: statusToDb(status) }).select("id").single();
-    if (inserted?.id) persistedReport = { ...savedReport, id: inserted.id };
-    if (savedReport.ownershipVerification?.length && inserted?.id) {
-      await supabase.from("ownership_verification_clues").insert(savedReport.ownershipVerification.slice(0, 5).map((clue, position) => ({ report_id: inserted.id, owner_user_id: data.session.user.id, question: clue.question, answer: clue.answer, position })));
+    const { data: inserted, error: insertError } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: savedReport.publicDescription, finder_first_name: savedReport.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: statusToDb(status) }).select("id").single();
+    if (insertError || !inserted?.id) throw insertError ?? new Error("Could not save listing");
+    persistedReport = { ...savedReport, id: inserted.id };
+    if (report.type === "lost" && savedReport.ownershipVerification?.length) {
+      const { error: clueError } = await supabase.from("ownership_verification_clues").insert(savedReport.ownershipVerification.slice(0, 5).map((clue, position) => ({ report_id: inserted.id, owner_user_id: data.session.user.id, question: clue.question, answer: clue.answer, position })));
+      if (clueError) throw clueError;
     }
     const existingIds = oppositeUserReports.map((existing) => existing.id).filter((id) => !id.startsWith("report-"));
     if (existingIds.length) await supabase.from("reports").update({ status: report.type === "found" ? "ownership_verification_pending" : "potential_match" }).in("id", existingIds).eq("user_id", data.session.user.id);

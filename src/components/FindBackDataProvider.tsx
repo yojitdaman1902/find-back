@@ -51,7 +51,7 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
         if (!existingReports?.length && anonymousReports.length) {
           for (const report of anonymousReports) {
             const { data: inserted } = await supabase.from("reports").insert({ user_id: session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: report.publicDescription, finder_first_name: report.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: report.status.toLowerCase().replace(/\s+/g, "_") }).select("id").single();
-            if (inserted?.id && report.ownershipVerification?.length) {
+            if (inserted?.id && report.type === "lost" && report.ownershipVerification?.length) {
               await supabase.from("ownership_verification_clues").insert(report.ownershipVerification.slice(0, 5).map((clue, position) => ({ report_id: inserted.id, owner_user_id: session.user.id, question: clue.question, answer: clue.answer, position })));
             }
           }

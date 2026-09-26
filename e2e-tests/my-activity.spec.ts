@@ -12,18 +12,12 @@ test("edit listing from My Activity persists after refresh", async ({ page }) =>
   await expect(page.getByText("Updated Nike Backpack", { exact: true })).toBeVisible();
 });
 
-test("save ownership questions from My Activity persists after refresh", async ({ page }) => {
+test("lost report actions do not include ownership-question editing", async ({ page }) => {
   await page.goto("/dashboard");
   await page.getByRole("button", { name: "Actions for Black Nike Backpack" }).click();
-  await page.getByRole("button", { name: "Ownership Check" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "Add Question" }).click();
-  await dialog.getByRole("textbox").nth(2).fill("What was inside the side pocket?");
-  await dialog.getByRole("textbox").nth(3).fill("Notebook");
-  await dialog.getByRole("button", { name: "Save Ownership Check" }).click();
-  await expect(page.getByText("Ownership questions saved ✓")).toBeVisible();
-  await page.reload();
-  await expect(page.getByText("✓ 3 questions configured", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ownership Check" })).not.toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit Listing" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete Listing" })).toBeVisible();
 });
 
 test("delete listing from My Activity removes it after refresh", async ({ page }) => {
