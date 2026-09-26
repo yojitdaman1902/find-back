@@ -71,6 +71,25 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
     return () => { active = false; };
   }, [session, sessionLoading]);
 
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    const refreshSharedReports = async () => {
+      const [ownReports, sharedReports] = await Promise.all([loadReportsForUser(userId), loadMatchFeatures()]);
+      if (active) {
+        setReports(ownReports);
+        setMatchReports(sharedReports);
+      }
+    };
+    const interval = window.setInterval(refreshSharedReports, 5000);
+    window.addEventListener("focus", refreshSharedReports);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshSharedReports);
+    };
+  }, [userId]);
+
   const value = useMemo(() => ({ reports, matches: session?.user ? (reports.length ? getActiveMatches(reports, matchReports) : []) : getActiveMatches(reports, matchReports), profileName, isLoading, refreshReports }), [reports, matchReports, profileName, isLoading, userId, session?.user]);
   return <FindBackDataContext.Provider value={value}>{children}</FindBackDataContext.Provider>;
 }
