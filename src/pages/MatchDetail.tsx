@@ -7,8 +7,8 @@ import { getMatchById, updateReportStatus } from "@/lib/findback-data";
 
 export default function MatchDetail() {
   const { matchId = "match-backpack" } = useParams(); const navigate = useNavigate();
-  const { reports, refreshReports } = useFindBackData();
-  const match = getMatchById(matchId, reports);
+  const { reports, matches, refreshReports } = useFindBackData();
+  const match = matches.find((item) => item.id === matchId) ?? getMatchById(matchId, reports);
   const [answer, setAnswer] = useState(""); const [verified, setVerified] = useState(false); const [recovered, setRecovered] = useState(false); const [failed, setFailed] = useState(false);
   const lost = reports.find((report) => report.id === match.targetReportId) ?? reports.find((report) => report.type === "lost") ?? reports[0];
   const verify = async () => { if (answer.trim().toLowerCase().includes("red") && lost) { setVerified(true); setFailed(false); await updateReportStatus(lost.id, "Verified"); await refreshReports(); } else setFailed(true); };

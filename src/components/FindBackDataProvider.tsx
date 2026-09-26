@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getActiveMatches, getReports, loadReportsForUser, type ItemReport, type Match } from "@/lib/findback-data";
+import { getActiveMatches, getReports, loadMatchFeatures, loadReportsForUser, type ItemReport, type Match } from "@/lib/findback-data";
 import { useSessionContext } from "@/components/SessionContextProvider";
 
 type FindBackData = {
@@ -20,15 +20,20 @@ function fallbackName(email?: string) {
 export function FindBackDataProvider({ children }: { children: React.ReactNode }) {
   const { session, isLoading: sessionLoading } = useSessionContext();
   const [reports, setReports] = useState<ItemReport[]>([]);
+  const [matchReports, setMatchReports] = useState<ItemReport[]>([]);
   const [profileName, setProfileName] = useState("there");
   const [isLoading, setIsLoading] = useState(true);
   const userId = session?.user.id;
 
   const refreshReports = async () => {
     if (userId) {
-      setReports(await loadReportsForUser(userId));
+      const [ownReports, sharedReports] = await Promise.all([loadReportsForUser(userId), loadMatchFeatures()]);
+      setReports(ownReports);
+      setMatchReports(sharedReports);
     } else {
-      setReports(getReports());
+      const localReports = getReports();
+      setReports(localReports);
+      setMatchReports(localReports);
     }
   };
 
@@ -49,12 +54,16 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
           await supabase.from("profiles").upsert({ id: session.user.id, display_name: derivedName, updated_at: new Date().toISOString() });
         }
         if (active) {
+          const [ownReports, sharedReports] = await Promise.all([loadReportsForUser(session.user.id), loadMatchFeatures()]);
           setProfileName(profile?.display_name || derivedName);
-          setReports(await loadReportsForUser(session.user.id));
+          setReports(ownReports);
+          setMatchReports(sharedReports);
         }
       } else if (active) {
+        const localReports = getReports();
         setProfileName("there");
-        setReports(getReports());
+        setReports(localReports);
+        setMatchReports(localReports);
       }
       if (active) setIsLoading(false);
     };
@@ -62,7 +71,7 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
     return () => { active = false; };
   }, [session, sessionLoading]);
 
-  const value = useMemo(() => ({ reports, matches: session?.user ? (reports.length ? getActiveMatches(reports) : []) : getActiveMatches(reports), profileName, isLoading, refreshReports }), [reports, profileName, isLoading, userId, session?.user]);
+  const value = useMemo(() => ({ reports, matches: session?.user ? (reports.length ? getActiveMatches(reports, matchReports) : []) : getActiveMatches(reports, matchReports), profileName, isLoading, refreshReports }), [reports, matchReports, profileName, isLoading, userId, session?.user]);
   return <FindBackDataContext.Provider value={value}>{children}</FindBackDataContext.Provider>;
 }
 

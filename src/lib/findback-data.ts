@@ -53,14 +53,7 @@ export const demoMatches: Match[] = [
     image: itemImages.backpack,
     type: "found",
     explanation: "Same color and brand cues, with a red keychain mentioned in both descriptions.",
-    factors: [
-      { label: "Item type", value: 100 },
-      { label: "Colour", value: 95 },
-      { label: "Location", value: 100 },
-      { label: "Time proximity", value: 87 },
-      { label: "Description", value: 91 },
-      { label: "Image similarity", value: 89 },
-    ],
+    factors: [{ label: "Item type", value: 100 }, { label: "Colour", value: 95 }, { label: "Location", value: 100 }, { label: "Time proximity", value: 87 }, { label: "Description", value: 91 }, { label: "Image similarity", value: 89 }],
     reasoning: "Both reports describe a black backpack found in the Library building within 30 minutes of the reported loss. Both descriptions mention a red keychain and a laptop charger.",
   },
   {
@@ -73,14 +66,7 @@ export const demoMatches: Match[] = [
     image: itemImages.earbuds,
     type: "found",
     explanation: "The category, dark finish, and nearby Student Union location align with your report.",
-    factors: [
-      { label: "Item type", value: 92 },
-      { label: "Colour", value: 84 },
-      { label: "Location", value: 72 },
-      { label: "Time proximity", value: 66 },
-      { label: "Description", value: 73 },
-      { label: "Image similarity", value: 68 },
-    ],
+    factors: [{ label: "Item type", value: 92 }, { label: "Colour", value: 84 }, { label: "Location", value: 72 }, { label: "Time proximity", value: 66 }, { label: "Description", value: 73 }, { label: "Image similarity", value: 68 }],
     reasoning: "This report has strong category and appearance signals, but the location and time are less precise than the leading match.",
   },
   {
@@ -93,59 +79,15 @@ export const demoMatches: Match[] = [
     image: itemImages.notebook,
     type: "found",
     explanation: "A possible category and color connection, though the place and time are less aligned.",
-    factors: [
-      { label: "Item type", value: 78 },
-      { label: "Colour", value: 81 },
-      { label: "Location", value: 49 },
-      { label: "Time proximity", value: 45 },
-      { label: "Description", value: 61 },
-      { label: "Image similarity", value: 57 },
-    ],
+    factors: [{ label: "Item type", value: 78 }, { label: "Colour", value: 81 }, { label: "Location", value: 49 }, { label: "Time proximity", value: 45 }, { label: "Description", value: 61 }, { label: "Image similarity", value: 57 }],
     reasoning: "The semantic engine found a loose match around the navy color and study context, but lacks enough shared identifying detail to rank this highly.",
   },
 ];
 
 const demoReports: ItemReport[] = [
-  {
-    id: "lost-backpack",
-    type: "lost",
-    itemName: "Black Nike Backpack",
-    category: "Bags",
-    brand: "Nike",
-    color: "Black",
-    description: "Black Nike backpack with a red keychain and a laptop charger inside.",
-    location: "Library — 2nd Floor",
-    date: "25 Sept",
-    time: "3:15 PM",
-    images: [itemImages.backpack],
-    status: "Potential Match",
-  },
-  {
-    id: "found-earbuds",
-    type: "found",
-    itemName: "Midnight AirPods Case",
-    category: "Electronics",
-    color: "Midnight blue",
-    description: "Small wireless earbuds case found beside the charging station.",
-    location: "Student Union — Atrium",
-    date: "24 Sept",
-    time: "12:18 PM",
-    images: [itemImages.earbuds],
-    status: "Reported",
-  },
-  {
-    id: "found-notebook",
-    type: "found",
-    itemName: "Navy Lecture Notebook",
-    category: "Books",
-    color: "Navy",
-    description: "Navy notebook with handwritten economics notes and a silver elastic.",
-    location: "Science Hall — Room 204",
-    date: "23 Sept",
-    time: "5:06 PM",
-    images: [itemImages.notebook],
-    status: "Recovered",
-  },
+  { id: "lost-backpack", type: "lost", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with a red keychain and a laptop charger inside.", location: "Library — 2nd Floor", date: "25 Sept", time: "3:15 PM", images: [itemImages.backpack], status: "Potential Match" },
+  { id: "found-earbuds", type: "found", itemName: "Midnight AirPods Case", category: "Electronics", color: "Midnight blue", description: "Small wireless earbuds case found beside the charging station.", location: "Student Union — Atrium", date: "24 Sept", time: "12:18 PM", images: [itemImages.earbuds], status: "Reported" },
+  { id: "found-notebook", type: "found", itemName: "Navy Lecture Notebook", category: "Books", color: "Navy", description: "Navy notebook with handwritten economics notes and a silver elastic.", location: "Science Hall — Room 204", date: "23 Sept", time: "5:06 PM", images: [itemImages.notebook], status: "Recovered" },
 ];
 
 export function getReports(storageKey = "findback-reports", seedDemo = true): ItemReport[] {
@@ -161,11 +103,9 @@ export function saveReports(reports: ItemReport[], storageKey = "findback-report
   localStorage.setItem(storageKey, JSON.stringify(reports));
 }
 
-export async function loadReportsForUser(userId: string): Promise<ItemReport[]> {
-  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, location, reported_date, reported_time, images, status, created_at").eq("user_id", userId).order("created_at", { ascending: false });
-  if (error || !data) return getReports(`findback-reports-${userId}`, false);
-  return data.map((row) => ({
-    id: row.id,
+function mapReportRow(row: any, id = row.id): ItemReport {
+  return {
+    id,
     type: row.report_type as ReportType,
     itemName: row.item_name,
     category: row.category,
@@ -177,17 +117,22 @@ export async function loadReportsForUser(userId: string): Promise<ItemReport[]> 
     time: row.reported_time,
     images: Array.isArray(row.images) ? row.images as string[] : [],
     status: row.status === "potential_match" ? "Potential Match" : row.status === "verified" ? "Verified" : row.status === "recovered" ? "Recovered" : "Reported",
-  }));
+  };
 }
 
-const synonymGroups = [
-  ["macbook", "laptop", "notebook", "computer"],
-  ["charger", "cable", "adapter", "power"],
-  ["earbuds", "airpods", "headphones", "buds"],
-  ["backpack", "rucksack", "bag"],
-  ["black", "dark", "midnight"],
-  ["silver", "grey", "gray", "metallic"],
-];
+export async function loadReportsForUser(userId: string): Promise<ItemReport[]> {
+  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, location, reported_date, reported_time, images, status, created_at").eq("user_id", userId).order("created_at", { ascending: false });
+  if (error || !data) return getReports(`findback-reports-${userId}`, false);
+  return data.map((row) => mapReportRow(row));
+}
+
+export async function loadMatchFeatures(): Promise<ItemReport[]> {
+  const { data, error } = await supabase.from("report_match_features").select("report_id, report_type, item_name, category, brand, color, description, location, reported_date, reported_time, images, created_at").order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((row) => mapReportRow(row, row.report_id));
+}
+
+const synonymGroups = [["macbook", "laptop", "notebook", "computer"], ["charger", "cable", "adapter", "power"], ["earbuds", "airpods", "headphones", "buds"], ["backpack", "rucksack", "bag"], ["black", "dark", "midnight"], ["silver", "grey", "gray", "metallic"]];
 
 function tokens(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((token) => token.length > 2);
@@ -233,33 +178,24 @@ function buildDynamicMatch(target: ItemReport, candidate: ItemReport): Match {
     image: candidate.images[0] || itemImages.backpack,
     type: candidate.type,
     explanation: `${matchLabel}: ${candidate.itemName} shares ${target.category.toLowerCase()} signals, descriptive clues, and nearby report context.`,
-    factors: [
-      { label: "Item type", value: category },
-      { label: "Colour", value: color },
-      { label: "Location", value: location },
-      { label: "Time proximity", value: time },
-      { label: "Description", value: description },
-      { label: "Image similarity", value: image },
-    ],
+    factors: [{ label: "Item type", value: category }, { label: "Colour", value: color }, { label: "Location", value: location }, { label: "Time proximity", value: time }, { label: "Description", value: description }, { label: "Image similarity", value: image }],
     reasoning: `Both reports describe a ${target.color.toLowerCase()} ${target.category.toLowerCase()} and share semantic clues across their item names and descriptions. The reports were made around ${candidate.location}, so FindBack ranked this as a ${matchLabel.toLowerCase()}.`,
     targetReportId: target.id,
     candidateReportId: candidate.id,
   };
 }
 
-export function getActiveMatches(reports?: ItemReport[]) {
+export function getActiveMatches(reports?: ItemReport[], comparisonReports?: ItemReport[]) {
   const sourceReports = reports ?? getReports().filter((report) => report.id.startsWith("report-"));
+  const candidates = comparisonReports ?? sourceReports;
   const target = sourceReports[0];
   if (!target) return demoMatches;
-  const dynamicMatches = sourceReports
-    .filter((report) => report.id !== target.id && report.type !== target.type)
-    .map((report) => buildDynamicMatch(target, report))
-    .sort((left, right) => right.score - left.score);
+  const dynamicMatches = candidates.filter((report) => report.id !== target.id && report.type !== target.type).map((report) => buildDynamicMatch(target, report)).sort((left, right) => right.score - left.score);
   return dynamicMatches.length ? [...dynamicMatches, ...demoMatches].slice(0, 3) : demoMatches;
 }
 
-export function getMatchById(id: string, reports?: ItemReport[]) {
-  return getActiveMatches(reports).find((match) => match.id === id) ?? demoMatches.find((match) => match.id === id) ?? demoMatches[0];
+export function getMatchById(id: string, reports?: ItemReport[], comparisonReports?: ItemReport[]) {
+  return getActiveMatches(reports, comparisonReports).find((match) => match.id === id) ?? demoMatches.find((match) => match.id === id) ?? demoMatches[0];
 }
 
 export async function saveReport(report: ItemReport) {
@@ -271,25 +207,10 @@ export async function saveReport(report: ItemReport) {
   let savedReport = { ...report, status };
 
   if (data.session?.user) {
-    const { data: inserted } = await supabase.from("reports").insert({
-      user_id: data.session.user.id,
-      report_type: report.type,
-      item_name: report.itemName,
-      category: report.category,
-      brand: report.brand,
-      color: report.color,
-      description: report.description,
-      location: report.location,
-      reported_date: report.date,
-      reported_time: report.time,
-      images: report.images,
-      status: status.toLowerCase().replace(" ", "_"),
-    }).select("id").single();
+    const { data: inserted } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: status.toLowerCase().replace(" ", "_") }).select("id").single();
     if (inserted?.id) savedReport = { ...savedReport, id: inserted.id };
     const existingIds = oppositeUserReports.map((existing) => existing.id).filter((id) => !id.startsWith("report-"));
-    if (existingIds.length) {
-      await supabase.from("reports").update({ status: "potential_match" }).in("id", existingIds).eq("user_id", data.session.user.id);
-    }
+    if (existingIds.length) await supabase.from("reports").update({ status: "potential_match" }).in("id", existingIds).eq("user_id", data.session.user.id);
   }
 
   const updatedReports = [savedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: "Potential Match" as ReportStatus } : existing)];
@@ -301,9 +222,7 @@ export async function updateReportStatus(id: string, status: ReportStatus) {
   const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
   const reports = getReports(storageKey, !data.session?.user).map((report) => report.id === id ? { ...report, status } : report);
   saveReports(reports, storageKey);
-  if (data.session?.user) {
-    await supabase.from("reports").update({ status: status.toLowerCase().replace(" ", "_") }).eq("id", id).eq("user_id", data.session.user.id);
-  }
+  if (data.session?.user) await supabase.from("reports").update({ status: status.toLowerCase().replace(" ", "_") }).eq("id", id).eq("user_id", data.session.user.id);
 }
 
 export function getLatestReport() {
