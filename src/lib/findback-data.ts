@@ -30,6 +30,8 @@ export type Match = {
   explanation: string;
   factors: { label: string; value: number }[];
   reasoning: string;
+  targetReportId?: string;
+  candidateReportId?: string;
 };
 
 export const itemImages = {
@@ -159,9 +161,94 @@ export function saveReports(reports: ItemReport[]) {
   localStorage.setItem("findback-reports", JSON.stringify(reports));
 }
 
+const synonymGroups = [
+  ["macbook", "laptop", "notebook", "computer"],
+  ["charger", "cable", "adapter", "power"],
+  ["earbuds", "airpods", "headphones", "buds"],
+  ["backpack", "rucksack", "bag"],
+  ["black", "dark", "midnight"],
+  ["silver", "grey", "gray", "metallic"],
+];
+
+function tokens(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((token) => token.length > 2);
+}
+
+function semanticSimilarity(left: string, right: string) {
+  const leftTokens = new Set(tokens(left));
+  const rightTokens = new Set(tokens(right));
+  const expandedMatches = [...leftTokens].filter((token) => rightTokens.has(token) || synonymGroups.some((group) => group.includes(token) && group.some((synonym) => rightTokens.has(synonym))));
+  const union = new Set([...leftTokens, ...rightTokens]).size;
+  return union ? Math.round((expandedMatches.length / union) * 100) : 0;
+}
+
+function timeScore(left: ItemReport, right: ItemReport) {
+  const leftTime = new Date(`${left.date}T${left.time}`);
+  const rightTime = new Date(`${right.date}T${right.time}`);
+  const difference = Math.abs(leftTime.getTime() - rightTime.getTime());
+  if (Number.isNaN(difference)) return 55;
+  return Math.max(0, Math.round(100 - difference / (1000 * 60 * 8)));
+}
+
+function formatDate(date: string) {
+  const parsed = new Date(`${date}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+}
+
+function buildDynamicMatch(target: ItemReport, candidate: ItemReport): Match {
+  const category = target.category.toLowerCase() === candidate.category.toLowerCase() ? 100 : semanticSimilarity(`${target.category} ${target.itemName}`, `${candidate.category} ${candidate.itemName}`);
+  const description = semanticSimilarity(`${target.itemName} ${target.brand ?? ""} ${target.color} ${target.description}`, `${candidate.itemName} ${candidate.brand ?? ""} ${candidate.color} ${candidate.description}`);
+  const color = semanticSimilarity(target.color, candidate.color);
+  const location = semanticSimilarity(target.location, candidate.location);
+  const time = timeScore(target, candidate);
+  const image = target.images.length > 0 && candidate.images.length > 0 ? 88 : 62;
+  const score = Math.round(description * 0.3 + image * 0.25 + location * 0.2 + time * 0.15 + category * 0.1);
+  const matchLabel = score >= 85 ? "Strong match" : score >= 70 ? "Promising match" : "Possible match";
+  return {
+    id: `match-${target.id}-${candidate.id}`,
+    itemName: candidate.itemName,
+    location: candidate.location,
+    date: formatDate(candidate.date),
+    time: candidate.time,
+    score,
+    image: candidate.images[0] || itemImages.backpack,
+    type: candidate.type,
+    explanation: `${matchLabel}: ${candidate.itemName} shares ${target.category.toLowerCase()} signals, descriptive clues, and nearby report context.`,
+    factors: [
+      { label: "Item type", value: category },
+      { label: "Colour", value: color },
+      { label: "Location", value: location },
+      { label: "Time proximity", value: time },
+      { label: "Description", value: description },
+      { label: "Image similarity", value: image },
+    ],
+    reasoning: `Both reports describe a ${target.color.toLowerCase()} ${target.category.toLowerCase()} and share semantic clues across their item names and descriptions. The reports were made around ${candidate.location}, so FindBack ranked this as a ${matchLabel.toLowerCase()}.`,
+    targetReportId: target.id,
+    candidateReportId: candidate.id,
+  };
+}
+
+export function getActiveMatches() {
+  const userReports = getReports().filter((report) => report.id.startsWith("report-"));
+  const target = userReports[0];
+  if (!target) return demoMatches;
+  const dynamicMatches = userReports
+    .filter((report) => report.id !== target.id && report.type !== target.type)
+    .map((report) => buildDynamicMatch(target, report))
+    .sort((left, right) => right.score - left.score);
+  return dynamicMatches.length ? [...dynamicMatches, ...demoMatches].slice(0, 3) : demoMatches;
+}
+
+export function getMatchById(id: string) {
+  return getActiveMatches().find((match) => match.id === id) ?? demoMatches.find((match) => match.id === id) ?? demoMatches[0];
+}
+
 export async function saveReport(report: ItemReport) {
   const reports = getReports();
-  saveReports([report, ...reports]);
+  const oppositeUserReports = reports.filter((existing) => existing.id.startsWith("report-") && existing.type !== report.type);
+  const savedReport = { ...report, status: oppositeUserReports.length ? "Potential Match" as ReportStatus : report.status };
+  const updatedReports = [savedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: "Potential Match" as ReportStatus } : existing)];
+  saveReports(updatedReports);
   const { data } = await supabase.auth.getSession();
   if (data.session?.user) {
     await supabase.from("reports").insert({
@@ -176,7 +263,7 @@ export async function saveReport(report: ItemReport) {
       reported_date: new Date().toISOString().slice(0, 10),
       reported_time: report.time,
       images: report.images,
-      status: report.status.toLowerCase().replace(" ", "_"),
+      status: savedReport.status.toLowerCase().replace(" ", "_"),
     });
   }
 }
