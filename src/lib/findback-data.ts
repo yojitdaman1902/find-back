@@ -43,6 +43,7 @@ export type ItemReport = {
   ownershipVerification?: OwnershipClue[];
   publicDescription?: string;
   finderFirstName?: string;
+  updatedAt?: string;
 };
 
 export type Match = {
@@ -122,7 +123,7 @@ const demoReports: ItemReport[] = [
 ];
 
 export const demoFoundReports: ItemReport[] = [
-  { id: "catalog-backpack", type: "found", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with private contents held securely by the finder.", publicDescription: "Black backpack found near the Library.", location: "Library — Ground Floor", date: "25 Sept", time: "3:42 PM", images: [itemImages.backpack], status: "Potential Match", finderFirstName: "Jordan", ownershipVerification: [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }] },
+  { id: "catalog-backpack", type: "found", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike Backpack with private contents held securely by the finder.", publicDescription: "Black backpack found near the Library.", location: "Library — Ground Floor", date: "25 Sept", time: "3:42 PM", images: [itemImages.backpack], status: "Potential Match", finderFirstName: "Jordan" },
   { id: "catalog-airpods", type: "found", itemName: "AirPods Pro", category: "Electronics", color: "White", description: "White wireless earbuds case found beside the canteen charging station.", publicDescription: "White wireless earbuds found near the Canteen.", location: "Canteen — Charging Station", date: "26 Sept", time: "11:18 AM", images: [itemImages.earbuds], status: "Reported", finderFirstName: "Maya" },
   { id: "catalog-bottle", type: "found", itemName: "Blue Water Bottle", category: "Other", color: "Blue", description: "Reusable blue insulated bottle with a matte finish.", publicDescription: "Blue insulated water bottle found at the Sports Complex.", location: "Sports Complex — Court 2", date: "26 Sept", time: "9:05 AM", images: ["https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=85"], status: "Reported", finderFirstName: "Riya" },
   { id: "catalog-id", type: "found", itemName: "Student ID Card", category: "Documents", color: "White and blue", description: "University student ID card found near the academic block entrance.", publicDescription: "Student ID card found near the Academic Block.", location: "Academic Block — Main Entrance", date: "25 Sept", time: "4:27 PM", images: [itemImages.id], status: "Potential Match", finderFirstName: "Noah" },
@@ -163,11 +164,12 @@ function mapReportRow(row: any, id = row.id): ItemReport {
     status: row.status === "potential_match" ? "Potential Match" : row.status === "ownership_verification_pending" ? "Ownership Verification Pending" : row.status === "ownership_verified" ? "Ownership Verified" : row.status === "verified" ? "Verified" : row.status === "recovered" ? "Recovered" : "Reported",
     publicDescription: row.public_description ?? undefined,
     finderFirstName: row.finder_first_name ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
   };
 }
 
 export async function loadReportsForUser(userId: string): Promise<ItemReport[]> {
-  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, created_at").eq("user_id", userId).order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, created_at, updated_at").eq("user_id", userId).order("created_at", { ascending: false });
   if (error || !data) return getReports(`findback-reports-${userId}`, false);
   const { data: clueRows } = await supabase.from("ownership_verification_clues").select("report_id, question, answer, position").eq("owner_user_id", userId).order("position", { ascending: true });
   const cluesByReport = new Map<string, OwnershipClue[]>();
@@ -193,12 +195,16 @@ function localReportById(reportId: string) {
   return [...getReports(), ...demoFoundReports].find((report) => report.id === reportId);
 }
 
+const demoVerificationClues: Record<string, OwnershipClue[]> = {
+  "catalog-backpack": [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }],
+};
+
 export async function loadOwnershipQuestions(foundReportId: string): Promise<OwnershipQuestion[]> {
   if (isUuid(foundReportId)) {
     const { data, error } = await supabase.rpc("get_ownership_questions", { target_report_id: foundReportId });
     if (!error && data) return data.map((row: { clue_position: number; question: string }) => ({ position: row.clue_position, question: row.question }));
   }
-  return (localReportById(foundReportId)?.ownershipVerification ?? []).map((clue, position) => ({ position, question: clue.question }));
+  return (demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? []).map((clue, position) => ({ position, question: clue.question }));
 }
 
 export async function loadOwnershipVerification(foundReportId: string, lostReportId: string) {
@@ -214,7 +220,7 @@ export async function verifyFoundOwnership(foundReportId: string, lostReportId: 
     const { data, error } = await supabase.rpc("verify_found_ownership", { target_found_report_id: foundReportId, target_lost_report_id: lostReportId, submitted_answers: answers });
     if (!error && data) return { verified: Boolean(data.verified), locked: Boolean(data.locked), attemptsRemaining: Number(data.attempts_remaining ?? 0), verificationId: data.verification_id ?? undefined };
   }
-  const clues = localReportById(foundReportId)?.ownershipVerification ?? [];
+  const clues = demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? [];
   const result = verifyOwnership(clues, answers);
   return { verified: result.verified, locked: false, attemptsRemaining: result.verified ? OWNERSHIP_MAX_ATTEMPTS : Math.max(0, OWNERSHIP_MAX_ATTEMPTS - 1), verificationId: result.verified ? `demo-verification-${foundReportId}-${lostReportId}` : undefined };
 }
@@ -387,7 +393,7 @@ export async function saveReport(report: ItemReport) {
     const { data: inserted } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: savedReport.publicDescription, finder_first_name: savedReport.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: statusToDb(status) }).select("id").single();
     if (inserted?.id) persistedReport = { ...savedReport, id: inserted.id };
     if (savedReport.ownershipVerification?.length && inserted?.id) {
-      await supabase.from("ownership_verification_clues").insert(savedReport.ownershipVerification.slice(0, 4).map((clue, position) => ({ report_id: inserted.id, owner_user_id: data.session.user.id, question: clue.question, answer: clue.answer, position })));
+      await supabase.from("ownership_verification_clues").insert(savedReport.ownershipVerification.slice(0, 5).map((clue, position) => ({ report_id: inserted.id, owner_user_id: data.session.user.id, question: clue.question, answer: clue.answer, position })));
     }
     const existingIds = oppositeUserReports.map((existing) => existing.id).filter((id) => !id.startsWith("report-"));
     if (existingIds.length) await supabase.from("reports").update({ status: report.type === "found" ? "ownership_verification_pending" : "potential_match" }).in("id", existingIds).eq("user_id", data.session.user.id);
@@ -395,6 +401,52 @@ export async function saveReport(report: ItemReport) {
 
   const updatedReports = [persistedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: existing.type === "lost" ? "Ownership Verification Pending" as ReportStatus : "Potential Match" as ReportStatus } : existing)];
   saveReports(updatedReports, storageKey);
+}
+
+export async function saveOwnershipQuestions(reportId: string, clues: OwnershipClue[]) {
+  const cleanClues = clues.map((clue) => ({ question: clue.question.trim(), answer: clue.answer.trim() })).filter((clue) => clue.question && clue.answer);
+  if (cleanClues.length < 2 || cleanClues.length > 5) throw new Error("Ownership questions must contain between 2 and 5 items");
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.user && isUuid(reportId)) {
+    const { error } = await supabase.rpc("replace_ownership_clues", { target_report_id: reportId, clues: cleanClues });
+    if (error) throw error;
+    return;
+  }
+  const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
+  const reports = getReports(storageKey, !data.session?.user).map((report) => report.id === reportId ? { ...report, ownershipVerification: cleanClues } : report);
+  saveReports(reports, storageKey);
+}
+
+export async function updateReport(report: ItemReport, previousReport: ItemReport) {
+  const { data } = await supabase.auth.getSession();
+  const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
+  const matchRelevantChanged = report.itemName !== previousReport.itemName || report.category !== previousReport.category || report.brand !== previousReport.brand || report.color !== previousReport.color || report.description !== previousReport.description || report.location !== previousReport.location || report.date !== previousReport.date || report.time !== previousReport.time || JSON.stringify(report.images) !== JSON.stringify(previousReport.images);
+  const nextStatus = matchRelevantChanged ? "Reported" as ReportStatus : report.status;
+  const updatedReport = { ...report, status: nextStatus, publicDescription: report.type === "found" ? getPublicFoundDescription(report) : report.publicDescription };
+
+  if (data.session?.user && isUuid(report.id)) {
+    const clues = report.type === "lost" && report.ownershipVerification && report.ownershipVerification.length >= 2 ? report.ownershipVerification.slice(0, 5).map((clue) => ({ question: clue.question.trim(), answer: clue.answer.trim() })) : null;
+    const { data: saved, error } = await supabase.rpc("update_owned_report", { target_report_id: report.id, listing: { item_name: report.itemName, category: report.category, brand: report.brand ?? "", color: report.color, description: report.description, public_description: updatedReport.publicDescription ?? "", location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: statusToDb(nextStatus) }, clues });
+    const savedRow = Array.isArray(saved) ? saved[0] : saved;
+    if (error || !savedRow) throw error ?? new Error("Could not update listing");
+    return mapReportRow(savedRow);
+  }
+
+  const reports = getReports(storageKey, !data.session?.user);
+  const nextReports = reports.map((item) => item.id === report.id ? updatedReport : item);
+  saveReports(nextReports, storageKey);
+  if (report.type === "lost" && report.ownershipVerification && report.ownershipVerification.length >= 2) await saveOwnershipQuestions(report.id, report.ownershipVerification);
+  return updatedReport;
+}
+
+export async function deleteReport(id: string) {
+  const { data } = await supabase.auth.getSession();
+  const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
+  if (data.session?.user && isUuid(id)) {
+    const { data: deleted, error } = await supabase.from("reports").delete().eq("id", id).eq("user_id", data.session.user.id).select("id").single();
+    if (error || !deleted) throw error ?? new Error("Could not delete listing");
+  }
+  saveReports(getReports(storageKey, !data.session?.user).filter((report) => report.id !== id), storageKey);
 }
 
 export async function updateReportStatus(id: string, status: ReportStatus) {
