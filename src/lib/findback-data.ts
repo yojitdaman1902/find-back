@@ -27,6 +27,17 @@ export type ChatMessage = {
   createdAt: string;
 };
 
+export type ChatConversation = {
+  id: string;
+  foundReportId: string;
+  lostReportId: string;
+  itemName: string;
+  finderFirstName?: string;
+  lastMessage?: string;
+  lastMessageAt?: string;
+  verifiedAt: string;
+};
+
 export type ItemReport = {
   id: string;
   type: ReportType;
@@ -251,6 +262,39 @@ export async function sendChatMessage(verificationId: string, body: string, send
   const messages = await loadChatMessages(verificationId);
   localStorage.setItem(localChatKey(verificationId), JSON.stringify([...messages, message]));
   return message;
+}
+
+export async function loadChatConversations(): Promise<ChatConversation[]> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  if (userId && isUuid(userId)) {
+    const { data: verifications, error } = await supabase.from("ownership_verifications").select("id, found_report_id, lost_report_id, verified_at").or(`claimant_user_id.eq.${userId},finder_user_id.eq.${userId}`).order("verified_at", { ascending: false });
+    if (error || !verifications?.length) return [];
+    const reportIds = verifications.flatMap((verification) => [verification.found_report_id, verification.lost_report_id]);
+    const [{ data: features }, { data: messages }] = await Promise.all([
+      supabase.from("report_match_features").select("report_id, item_name, finder_first_name").in("report_id", reportIds),
+      supabase.from("chat_messages").select("id, verification_id, sender_user_id, body, created_at").in("verification_id", verifications.map((verification) => verification.id)).order("created_at", { ascending: false }),
+    ]);
+    const featureByReport = new Map((features ?? []).map((feature) => [feature.report_id, feature]));
+    const latestByVerification = new Map<string, { body: string; created_at: string }>();
+    (messages ?? []).forEach((message) => { if (!latestByVerification.has(message.verification_id)) latestByVerification.set(message.verification_id, { body: message.body, created_at: message.created_at }); });
+    return verifications.map((verification) => {
+      const feature = featureByReport.get(verification.found_report_id) ?? featureByReport.get(verification.lost_report_id);
+      const latest = latestByVerification.get(verification.id);
+      return { id: verification.id, foundReportId: verification.found_report_id, lostReportId: verification.lost_report_id, itemName: feature?.item_name ?? "Verified handoff", finderFirstName: feature?.finder_first_name ?? undefined, lastMessage: latest?.body, lastMessageAt: latest?.created_at, verifiedAt: verification.verified_at };
+    });
+  }
+  return demoMatches.flatMap((match) => {
+    const foundReportId = match.candidateReportId ?? (match.id === "match-backpack" ? "catalog-backpack" : undefined);
+    const lostReportId = match.targetReportId ?? (match.id === "match-backpack" ? "lost-backpack" : undefined);
+    if (!foundReportId || !lostReportId) return [];
+    const verificationId = `demo-verification-${foundReportId}-${lostReportId}`;
+    const stored = localStorage.getItem(localChatKey(verificationId));
+    if (!stored) return [];
+    const messages = JSON.parse(stored) as ChatMessage[];
+    const latest = messages[messages.length - 1];
+    return [{ id: verificationId, foundReportId, lostReportId, itemName: match.itemName, finderFirstName: match.finderFirstName, lastMessage: latest?.body, lastMessageAt: latest?.createdAt, verifiedAt: latest?.createdAt ?? new Date().toISOString() }];
+  });
 }
 
 const synonymGroups = [["macbook", "laptop", "notebook", "computer"], ["charger", "cable", "adapter", "power"], ["earbuds", "airpods", "headphones", "buds"], ["backpack", "rucksack", "bag"], ["black", "dark", "midnight"], ["silver", "grey", "gray", "metallic"]];

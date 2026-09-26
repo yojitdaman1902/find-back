@@ -13,6 +13,7 @@ import MatchDetail from "./pages/MatchDetail";
 import Dashboard from "./pages/Dashboard";
 import FoundItems from "./pages/FoundItems";
 import OwnershipVerification from "./pages/OwnershipVerification";
+import Chat from "./pages/Chat";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import { supabase } from "./integrations/supabase/client";
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/matches/:matchId" element={<MatchDetail />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/found-items" element={<FoundItems />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="/verify-ownership/:foundReportId" element={<OwnershipVerification />} />
             <Route path="/auth/:path" element={<AuthPage />} />
             <Route path="*" element={<NotFound />} />
