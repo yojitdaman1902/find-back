@@ -1,19 +1,40 @@
-// Update this page (the content is just a fallback if you fail to update the page)
-
-import { MadeWithDyad } from "@/components/made-with-dyad";
+import { ArrowUpRight, Clock3, MapPin, Sparkles, TrendingUp, Users } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowLink, AppShell, Eyebrow, GlassCard, LinkButton, MatchScore, SectionArrow } from "@/components/findback-ui";
+import { demoMatches, getReports, itemImages } from "@/lib/findback-data";
 
 const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">
-          Start building your amazing project here!
-        </p>
+  const reports = getReports();
+  const stats = [
+    { value: "248", label: "Lost items", note: "+18 this week", icon: TrendingUp },
+    { value: "176", label: "Found items", note: "Across 4 campuses", icon: MapPin },
+    { value: "93", label: "Possible matches", note: "AI-ranked today", icon: Sparkles },
+    { value: "71%", label: "Items recovered", note: "Community success rate", icon: Users },
+  ];
+  return <AppShell>
+    <section className="relative mx-auto max-w-7xl px-5 pb-20 pt-16 sm:px-8 sm:pt-24 lg:pb-28 lg:pt-28">
+      <div className="absolute -left-24 top-4 -z-10 size-72 rounded-full bg-blue-500/10 blur-3xl" />
+      <div className="grid items-center gap-14 lg:grid-cols-[1.1fr_.9fr]">
+        <div className="max-w-2xl">
+          <Eyebrow icon={Sparkles}>AI-powered campus recovery</Eyebrow>
+          <h1 className="max-w-2xl text-[3.35rem] font-semibold leading-[.98] tracking-[-0.075em] text-white sm:text-7xl">Lost something?<br /><span className="bg-gradient-to-r from-white via-[#9fbaff] to-[#7b86ff] bg-clip-text text-transparent">Find it back.</span></h1>
+          <p className="mt-7 max-w-xl text-lg leading-8 text-slate-400">The intelligent campus lost & found that connects your belongings with the people who found them.</p>
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row"><LinkButton to="/report/lost">I lost something <ArrowUpRight className="size-4" /></LinkButton><Link to="/report/found" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08]">I found something <ArrowUpRight className="size-4" /></Link></div>
+          <div className="mt-9 flex items-center gap-3 text-sm text-slate-500"><span className="flex -space-x-2"><span className="grid size-7 place-items-center rounded-full border-2 border-[#070b16] bg-[#f0b493] text-[10px] text-[#6b3525]">AK</span><span className="grid size-7 place-items-center rounded-full border-2 border-[#070b16] bg-[#8bb6d8] text-[10px] text-[#183149]">JM</span><span className="grid size-7 place-items-center rounded-full border-2 border-[#070b16] bg-[#a7d3b3] text-[10px] text-[#214930]">RS</span></span><span><b className="font-medium text-slate-300">1,240+</b> students reunited this semester</span></div>
+        </div>
+        <div className="relative lg:pl-8">
+          <div className="absolute -right-8 -top-14 size-48 rounded-full bg-violet-500/10 blur-3xl" />
+          <GlassCard className="relative overflow-hidden p-3 transition duration-500 hover:-translate-y-1">
+            <div className="relative aspect-[1.05/1] overflow-hidden rounded-[18px] bg-[#101b31]"><img src={itemImages.backpack} alt="Black backpack in a campus library" className="h-full w-full object-cover opacity-80" /><div className="absolute inset-0 bg-gradient-to-t from-[#07101f] via-transparent to-transparent" /><div className="absolute left-4 top-4 rounded-full border border-white/15 bg-[#07101f]/70 px-3 py-1.5 text-[11px] font-medium text-blue-100 backdrop-blur-md"><span className="mr-1.5 inline-block size-1.5 rounded-full bg-emerald-300" /> Live AI match</div><div className="absolute bottom-5 left-5 right-5"><div className="flex items-end justify-between gap-4"><div><p className="text-xs text-blue-200/80">Potential match</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Black Nike Backpack</h2><p className="mt-1 text-sm text-slate-300">Library · 2nd Floor</p></div><MatchScore score={94} size="md" /></div></div></div>
+            <div className="flex items-center justify-between px-2 pb-1 pt-4"><div className="flex items-center gap-2 text-xs text-slate-400"><Clock3 className="size-3.5" /> Reported 27 min apart</div><Link to="/matches/match-backpack" className="flex size-9 items-center justify-center rounded-full border border-white/10 text-slate-300 transition hover:bg-white/10"><ArrowUpRight className="size-4" /></Link></div>
+          </GlassCard>
+          <div className="absolute -bottom-8 -left-4 hidden w-48 rounded-[18px] border border-white/10 bg-[#111b2e]/90 p-3 shadow-2xl backdrop-blur-xl sm:block"><div className="flex items-center justify-between"><span className="text-[10px] uppercase tracking-wider text-slate-500">Recovery pulse</span><span className="text-[10px] text-emerald-300">+12.4%</span></div><div className="mt-3 flex h-10 items-end gap-1"><span className="h-3 flex-1 rounded-t bg-blue-400/30" /><span className="h-5 flex-1 rounded-t bg-blue-400/40" /><span className="h-4 flex-1 rounded-t bg-blue-400/50" /><span className="h-7 flex-1 rounded-t bg-blue-400/70" /><span className="h-6 flex-1 rounded-t bg-blue-300/80" /><span className="h-9 flex-1 rounded-t bg-emerald-300" /></div></div>
+        </div>
       </div>
-      <MadeWithDyad />
-    </div>
-  );
+    </section>
+    <section className="mx-auto max-w-7xl px-5 pb-20 sm:px-8"><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{stats.map(({ value, label, note, icon: Icon }) => <GlassCard key={label} className="p-5 sm:p-6"><div className="flex items-start justify-between"><div className="text-3xl font-semibold tracking-[-0.06em] text-white">{value}</div><Icon className="size-4 text-blue-300" /></div><p className="mt-3 text-sm font-medium text-slate-300">{label}</p><p className="mt-1 text-xs text-slate-500">{note}</p></GlassCard>)}</div></section>
+    <section className="mx-auto max-w-7xl px-5 pb-24 sm:px-8"><div className="mb-7 flex items-end justify-between"><div><Eyebrow>Fresh from the network</Eyebrow><h2 className="text-2xl font-semibold tracking-[-0.04em] text-white sm:text-3xl">Recent AI matches</h2><p className="mt-2 text-sm text-slate-500">A little signal can go a long way.</p></div><ArrowLink to="/matches">View all matches</ArrowLink></div><div className="grid gap-4 lg:grid-cols-3">{demoMatches.map((match) => <Link key={match.id} to={`/matches/${match.id}`} className="group"><GlassCard className="overflow-hidden transition duration-300 hover:-translate-y-1 hover:border-blue-300/25"><div className="relative h-48 overflow-hidden"><img src={match.image} alt={match.itemName} className="h-full w-full object-cover opacity-75 transition duration-500 group-hover:scale-105 group-hover:opacity-90" /><div className="absolute inset-0 bg-gradient-to-t from-[#0c1425] via-transparent to-transparent" /><div className="absolute right-4 top-4"><MatchScore score={match.score} size="sm" /></div><div className="absolute bottom-4 left-4"><p className="text-xs text-blue-200/80">{match.type === "found" ? "Found item" : "Lost report"}</p><h3 className="mt-1 font-semibold text-white">{match.itemName}</h3></div></div><div className="p-4"><div className="flex items-center justify-between text-xs text-slate-500"><span>{match.location}</span><span>{match.date}</span></div><p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-400">{match.explanation}</p><div className="mt-4 flex items-center justify-between text-xs font-medium text-blue-200"><span>See why it matches</span><SectionArrow /></div></div></GlassCard></Link>)}</div></section>
+    <section className="mx-auto max-w-7xl px-5 pb-24 sm:px-8"><GlassCard className="relative overflow-hidden p-7 sm:p-10"><div className="absolute right-0 top-0 size-72 rounded-full bg-emerald-400/10 blur-3xl" /><div className="relative flex flex-col items-start justify-between gap-7 md:flex-row md:items-center"><div><p className="text-sm font-medium text-emerald-300">A better kind of campus community</p><h2 className="mt-2 max-w-xl text-2xl font-semibold tracking-[-0.04em] text-white sm:text-3xl">Every found item is a story waiting for its way home.</h2></div><LinkButton to="/report/found" className="bg-emerald-400 text-[#07151a] shadow-[0_10px_30px_rgba(110,231,183,.18)] hover:bg-emerald-300">Help return an item <ArrowUpRight className="size-4" /></LinkButton></div></GlassCard></section>
+  </AppShell>;
 };
-
 export default Index;
