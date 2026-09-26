@@ -49,7 +49,7 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
         const { data: existingReports } = await supabase.from("reports").select("id").eq("user_id", session.user.id).limit(1);
         const anonymousReports = getReports().filter((report) => report.id.startsWith("report-"));
         if (!existingReports?.length && anonymousReports.length) {
-          await supabase.from("reports").insert(anonymousReports.map((report) => ({ user_id: session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: report.status.toLowerCase().replace(" ", "_") })));
+          await supabase.from("reports").insert(anonymousReports.map((report) => ({ user_id: session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: report.publicDescription, finder_first_name: report.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: report.status.toLowerCase().replace(" ", "_") })));
         }
         if (!profile) {
           await supabase.from("profiles").upsert({ id: session.user.id, display_name: derivedName, updated_at: new Date().toISOString() });

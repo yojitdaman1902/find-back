@@ -132,17 +132,19 @@ function mapReportRow(row: any, id = row.id): ItemReport {
     time: row.reported_time,
     images: Array.isArray(row.images) ? row.images as string[] : [],
     status: row.status === "potential_match" ? "Potential Match" : row.status === "verified" ? "Verified" : row.status === "recovered" ? "Recovered" : "Reported",
+    publicDescription: row.public_description ?? undefined,
+    finderFirstName: row.finder_first_name ?? undefined,
   };
 }
 
 export async function loadReportsForUser(userId: string): Promise<ItemReport[]> {
-  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, location, reported_date, reported_time, images, status, created_at").eq("user_id", userId).order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, created_at").eq("user_id", userId).order("created_at", { ascending: false });
   if (error || !data) return getReports(`findback-reports-${userId}`, false);
   return data.map((row) => mapReportRow(row));
 }
 
 export async function loadMatchFeatures(): Promise<ItemReport[]> {
-  const { data, error } = await supabase.from("report_match_features").select("report_id, report_type, item_name, category, brand, color, description, location, reported_date, reported_time, images, created_at").order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("report_match_features").select("report_id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, created_at").order("created_at", { ascending: false });
   if (error || !data) return [];
   return data.map((row) => mapReportRow(row, row.report_id));
 }
@@ -219,8 +221,10 @@ export function getPotentialMatchCount(report: ItemReport, candidates: ItemRepor
 
 export function getPublicFoundDescription(report: ItemReport) {
   if (report.publicDescription) return report.publicDescription;
-  const brand = report.brand ? `${report.brand} ` : "";
-  return `${report.color} ${brand}${report.category.toLowerCase()} found near ${report.location.split("—")[0].trim()}.`;
+  const descriptor = (report.itemName || report.category).trim();
+  const color = report.color.trim();
+  const publicLabel = descriptor.toLowerCase().startsWith(color.toLowerCase()) ? descriptor : `${color} ${descriptor}`;
+  return `${publicLabel} found near ${report.location.split("—")[0].trim()}.`;
 }
 
 export async function saveReport(report: ItemReport) {
@@ -229,16 +233,17 @@ export async function saveReport(report: ItemReport) {
   const reports = getReports(storageKey, !data.session?.user);
   const oppositeUserReports = reports.filter((existing) => existing.type !== report.type);
   const status = oppositeUserReports.length ? "Potential Match" as ReportStatus : report.status;
-  let savedReport = { ...report, status };
+  const savedReport = { ...report, status, publicDescription: report.type === "found" ? getPublicFoundDescription(report) : report.publicDescription };
+  let persistedReport = savedReport;
 
   if (data.session?.user) {
-    const { data: inserted } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: status.toLowerCase().replace(" ", "_") }).select("id").single();
-    if (inserted?.id) savedReport = { ...savedReport, id: inserted.id };
+    const { data: inserted } = await supabase.from("reports").insert({ user_id: data.session.user.id, report_type: report.type, item_name: report.itemName, category: report.category, brand: report.brand, color: report.color, description: report.description, public_description: savedReport.publicDescription, finder_first_name: savedReport.finderFirstName, location: report.location, reported_date: report.date, reported_time: report.time, images: report.images, status: status.toLowerCase().replace(" ", "_") }).select("id").single();
+    if (inserted?.id) persistedReport = { ...savedReport, id: inserted.id };
     const existingIds = oppositeUserReports.map((existing) => existing.id).filter((id) => !id.startsWith("report-"));
     if (existingIds.length) await supabase.from("reports").update({ status: "potential_match" }).in("id", existingIds).eq("user_id", data.session.user.id);
   }
 
-  const updatedReports = [savedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: "Potential Match" as ReportStatus } : existing)];
+  const updatedReports = [persistedReport, ...reports.map((existing) => oppositeUserReports.some((match) => match.id === existing.id) ? { ...existing, status: "Potential Match" as ReportStatus } : existing)];
   saveReports(updatedReports, storageKey);
 }
 
