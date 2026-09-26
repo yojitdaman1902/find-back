@@ -31,7 +31,7 @@ test("publish a found report to the catalog", async ({ page }) => {
   await page.getByRole("textbox", { name: "Expected answer *" }).nth(0).fill("Coral");
   await page.getByRole("textbox", { name: "Question *" }).nth(1).fill("Where was the umbrella last seen?");
   await page.getByRole("textbox", { name: "Expected answer *" }).nth(1).fill("Library east entrance");
-  await page.getByRole("button", { name: "Analyze my item" }).click();
+  await page.getByRole("button", { name: "Submit found report" }).click();
 
   await page.goto("/found-items");
   await page.getByPlaceholder("Search found items…").fill("Coral Campus Umbrella");
