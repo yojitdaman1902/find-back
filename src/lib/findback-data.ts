@@ -205,7 +205,7 @@ export async function loadOwnershipQuestions(foundReportId: string, lostReportId
     if (error || !data) return [];
     return data.map((row: { clue_position: number; question: string }) => ({ position: row.clue_position, question: row.question }));
   }
-  return (demoVerificationClues[lostReportId] ?? localReportById(lostReportId)?.ownershipVerification ?? []).map((clue, position) => ({ position, question: clue.question }));
+  return (demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? []).map((clue, position) => ({ position, question: clue.question }));
 }
 
 export async function loadOwnershipVerification(foundReportId: string, lostReportId: string) {
