@@ -16,6 +16,8 @@ export type ItemReport = {
   time: string;
   images: string[];
   status: ReportStatus;
+  publicDescription?: string;
+  finderFirstName?: string;
 };
 
 export type Match = {
@@ -88,6 +90,19 @@ const demoReports: ItemReport[] = [
   { id: "lost-backpack", type: "lost", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with a red keychain and a laptop charger inside.", location: "Library — 2nd Floor", date: "25 Sept", time: "3:15 PM", images: [itemImages.backpack], status: "Potential Match" },
   { id: "found-earbuds", type: "found", itemName: "Midnight AirPods Case", category: "Electronics", color: "Midnight blue", description: "Small wireless earbuds case found beside the charging station.", location: "Student Union — Atrium", date: "24 Sept", time: "12:18 PM", images: [itemImages.earbuds], status: "Reported" },
   { id: "found-notebook", type: "found", itemName: "Navy Lecture Notebook", category: "Books", color: "Navy", description: "Navy notebook with handwritten economics notes and a silver elastic.", location: "Science Hall — Room 204", date: "23 Sept", time: "5:06 PM", images: [itemImages.notebook], status: "Recovered" },
+];
+
+export const demoFoundReports: ItemReport[] = [
+  { id: "catalog-backpack", type: "found", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with a red keychain and a laptop charger inside.", publicDescription: "Black backpack found near the Library.", location: "Library — Ground Floor", date: "25 Sept", time: "3:42 PM", images: [itemImages.backpack], status: "Potential Match", finderFirstName: "Jordan" },
+  { id: "catalog-airpods", type: "found", itemName: "AirPods Pro", category: "Electronics", color: "White", description: "White wireless earbuds case found beside the canteen charging station.", publicDescription: "White wireless earbuds found near the Canteen.", location: "Canteen — Charging Station", date: "26 Sept", time: "11:18 AM", images: [itemImages.earbuds], status: "Reported", finderFirstName: "Maya" },
+  { id: "catalog-bottle", type: "found", itemName: "Blue Water Bottle", category: "Other", color: "Blue", description: "Reusable blue insulated bottle with a matte finish.", publicDescription: "Blue insulated water bottle found at the Sports Complex.", location: "Sports Complex — Court 2", date: "26 Sept", time: "9:05 AM", images: ["https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=85"], status: "Reported", finderFirstName: "Riya" },
+  { id: "catalog-id", type: "found", itemName: "Student ID Card", category: "Documents", color: "White and blue", description: "University student ID card found near the academic block entrance.", publicDescription: "Student ID card found near the Academic Block.", location: "Academic Block — Main Entrance", date: "25 Sept", time: "4:27 PM", images: [itemImages.id], status: "Potential Match", finderFirstName: "Noah" },
+  { id: "catalog-hoodie", type: "found", itemName: "Black Hoodie", category: "Clothing", color: "Black", description: "Soft black pullover hoodie found on the third auditorium row.", publicDescription: "Black hoodie found in the Auditorium.", location: "Auditorium — Row C", date: "24 Sept", time: "6:11 PM", images: ["https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=85"], status: "Reported", finderFirstName: "Ethan" },
+  { id: "catalog-charger", type: "found", itemName: "USB-C Charger", category: "Electronics", color: "White", description: "65W USB-C laptop charger with a braided cable.", publicDescription: "USB-C charger found in the Computer Lab.", location: "Computer Lab — Desk 18", date: "24 Sept", time: "2:54 PM", images: ["https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=900&q=85"], status: "Reported", finderFirstName: "Leah" },
+  { id: "catalog-wallet", type: "found", itemName: "Brown Leather Wallet", category: "Accessories", color: "Brown", description: "Brown leather wallet with private contents held securely by the finder.", publicDescription: "Brown leather wallet found near the Library.", location: "Library — Reading Garden", date: "23 Sept", time: "1:36 PM", images: ["https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=900&q=85"], status: "Potential Match", finderFirstName: "Sam" },
+  { id: "catalog-keys", type: "found", itemName: "Set of Keys", category: "Keys", color: "Silver", description: "Small silver keyring with three keys and a fabric tag.", publicDescription: "Set of keys found near the Hostel Block.", location: "Hostel Block — Common Room", date: "22 Sept", time: "8:46 PM", images: [itemImages.keys], status: "Reported", finderFirstName: "Aarav" },
+  { id: "catalog-calculator", type: "found", itemName: "Scientific Calculator", category: "Electronics", color: "Black", description: "Black scientific calculator found beneath a classroom desk.", publicDescription: "Scientific calculator found in the Classroom Block.", location: "Classroom Block — Room 108", date: "22 Sept", time: "12:22 PM", images: ["https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=85"], status: "Recovered", finderFirstName: "Priya" },
+  { id: "catalog-phone", type: "found", itemName: "Samsung Galaxy Phone", category: "Electronics", color: "Graphite", description: "Graphite Samsung Galaxy phone found at the Canteen help desk.", publicDescription: "Graphite smartphone found at the Canteen help desk.", location: "Canteen — Help Desk", date: "21 Sept", time: "7:15 PM", images: ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=85"], status: "Potential Match", finderFirstName: "Ishaan" },
 ];
 
 export function getReports(storageKey = "findback-reports", seedDemo = true): ItemReport[] {
@@ -196,6 +211,16 @@ export function getActiveMatches(reports?: ItemReport[], comparisonReports?: Ite
 
 export function getMatchById(id: string, reports?: ItemReport[], comparisonReports?: ItemReport[]) {
   return getActiveMatches(reports, comparisonReports).find((match) => match.id === id) ?? demoMatches.find((match) => match.id === id) ?? demoMatches[0];
+}
+
+export function getPotentialMatchCount(report: ItemReport, candidates: ItemReport[]) {
+  return candidates.filter((candidate) => candidate.id !== report.id && candidate.type !== report.type).map((candidate) => buildDynamicMatch(report, candidate)).filter((match) => match.score >= 60).length;
+}
+
+export function getPublicFoundDescription(report: ItemReport) {
+  if (report.publicDescription) return report.publicDescription;
+  const brand = report.brand ? `${report.brand} ` : "";
+  return `${report.color} ${brand}${report.category.toLowerCase()} found near ${report.location.split("—")[0].trim()}.`;
 }
 
 export async function saveReport(report: ItemReport) {
