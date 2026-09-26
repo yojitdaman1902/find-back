@@ -13,7 +13,15 @@ test("collect private ownership clues on a lost report", async ({ page }) => {
   await expect(page.getByText("FindBack never publishes these answers.")).toBeVisible();
 });
 
-test("verify ownership before contacting the finder", async ({ page }) => {
+test("let a finder add private owner questions", async ({ page }) => {
+  await page.goto("/report/found");
+
+  await expect(page.getByRole("heading", { name: "Finder Verification Questions" })).toBeVisible();
+  await expect(page.getByText("Ask questions only the rightful owner should be able to answer.")).toBeVisible();
+  await expect(page.getByText("The expected answers are never shown on public found-item cards or to unverified claimants.")).toBeVisible();
+});
+
+test("verify ownership before opening secure chat", async ({ page }) => {
   await page.goto("/matches/match-backpack");
 
   await expect(page.getByRole("heading", { name: "Black Nike Backpack", level: 1 })).toBeVisible();
@@ -22,8 +30,8 @@ test("verify ownership before contacting the finder", async ({ page }) => {
 
   await page.getByLabel(/Question 1:/).fill("red");
   await page.getByLabel(/Question 2:/).fill("macbook charger + notebook");
-  await page.getByRole("button", { name: "Verify Ownership" }).click();
+  await page.getByRole("button", { name: "Prove Ownership" }).click();
 
   await expect(page.getByText("Ownership verified", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Contact Finder" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open secure chat" })).toBeVisible();
 });

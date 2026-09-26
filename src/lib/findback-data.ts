@@ -8,6 +8,25 @@ export type OwnershipClue = {
   answer: string;
 };
 
+export type OwnershipQuestion = {
+  position: number;
+  question: string;
+};
+
+export type OwnershipVerificationResult = {
+  verified: boolean;
+  locked: boolean;
+  attemptsRemaining: number;
+  verificationId?: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  senderUserId: string;
+  body: string;
+  createdAt: string;
+};
+
 export type ItemReport = {
   id: string;
   type: ReportType;
@@ -65,6 +84,8 @@ export const demoMatches: Match[] = [
     factors: [{ label: "Item type", value: 100 }, { label: "Colour", value: 95 }, { label: "Location", value: 100 }, { label: "Time proximity", value: 87 }, { label: "Description", value: 91 }, { label: "Image similarity", value: 89 }],
     reasoning: "Both reports describe a black backpack found in the Library building within 30 minutes of the reported loss. The AI signal is strong, but private clues are still required before contact is unlocked.",
     finderFirstName: "Jordan",
+    targetReportId: "lost-backpack",
+    candidateReportId: "catalog-backpack",
   },
   {
     id: "match-earbuds",
@@ -101,7 +122,7 @@ const demoReports: ItemReport[] = [
 ];
 
 export const demoFoundReports: ItemReport[] = [
-  { id: "catalog-backpack", type: "found", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with a red keychain and a laptop charger inside.", publicDescription: "Black backpack found near the Library.", location: "Library — Ground Floor", date: "25 Sept", time: "3:42 PM", images: [itemImages.backpack], status: "Potential Match", finderFirstName: "Jordan" },
+  { id: "catalog-backpack", type: "found", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with private contents held securely by the finder.", publicDescription: "Black backpack found near the Library.", location: "Library — Ground Floor", date: "25 Sept", time: "3:42 PM", images: [itemImages.backpack], status: "Potential Match", finderFirstName: "Jordan", ownershipVerification: [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }] },
   { id: "catalog-airpods", type: "found", itemName: "AirPods Pro", category: "Electronics", color: "White", description: "White wireless earbuds case found beside the canteen charging station.", publicDescription: "White wireless earbuds found near the Canteen.", location: "Canteen — Charging Station", date: "26 Sept", time: "11:18 AM", images: [itemImages.earbuds], status: "Reported", finderFirstName: "Maya" },
   { id: "catalog-bottle", type: "found", itemName: "Blue Water Bottle", category: "Other", color: "Blue", description: "Reusable blue insulated bottle with a matte finish.", publicDescription: "Blue insulated water bottle found at the Sports Complex.", location: "Sports Complex — Court 2", date: "26 Sept", time: "9:05 AM", images: ["https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=85"], status: "Reported", finderFirstName: "Riya" },
   { id: "catalog-id", type: "found", itemName: "Student ID Card", category: "Documents", color: "White and blue", description: "University student ID card found near the academic block entrance.", publicDescription: "Student ID card found near the Academic Block.", location: "Academic Block — Main Entrance", date: "25 Sept", time: "4:27 PM", images: [itemImages.id], status: "Potential Match", finderFirstName: "Noah" },
@@ -162,6 +183,66 @@ export async function loadMatchFeatures(): Promise<ItemReport[]> {
   const { data, error } = await supabase.from("report_match_features").select("report_id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, created_at").order("created_at", { ascending: false });
   if (error || !data) return [];
   return data.map((row) => mapReportRow(row, row.report_id));
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function localReportById(reportId: string) {
+  return [...getReports(), ...demoFoundReports].find((report) => report.id === reportId);
+}
+
+export async function loadOwnershipQuestions(foundReportId: string): Promise<OwnershipQuestion[]> {
+  if (isUuid(foundReportId)) {
+    const { data, error } = await supabase.rpc("get_ownership_questions", { target_report_id: foundReportId });
+    if (!error && data) return data.map((row: { clue_position: number; question: string }) => ({ position: row.clue_position, question: row.question }));
+  }
+  return (localReportById(foundReportId)?.ownershipVerification ?? []).map((clue, position) => ({ position, question: clue.question }));
+}
+
+export async function loadOwnershipVerification(foundReportId: string, lostReportId: string) {
+  if (isUuid(foundReportId) && isUuid(lostReportId)) {
+    const { data } = await supabase.from("ownership_verifications").select("id").eq("found_report_id", foundReportId).eq("lost_report_id", lostReportId).maybeSingle();
+    return data?.id ? { id: data.id } : null;
+  }
+  return null;
+}
+
+export async function verifyFoundOwnership(foundReportId: string, lostReportId: string, answers: string[]): Promise<OwnershipVerificationResult> {
+  if (isUuid(foundReportId) && isUuid(lostReportId)) {
+    const { data, error } = await supabase.rpc("verify_found_ownership", { target_found_report_id: foundReportId, target_lost_report_id: lostReportId, submitted_answers: answers });
+    if (!error && data) return { verified: Boolean(data.verified), locked: Boolean(data.locked), attemptsRemaining: Number(data.attempts_remaining ?? 0), verificationId: data.verification_id ?? undefined };
+  }
+  const clues = localReportById(foundReportId)?.ownershipVerification ?? [];
+  const result = verifyOwnership(clues, answers);
+  return { verified: result.verified, locked: false, attemptsRemaining: result.verified ? OWNERSHIP_MAX_ATTEMPTS : Math.max(0, OWNERSHIP_MAX_ATTEMPTS - 1), verificationId: result.verified ? `demo-verification-${foundReportId}-${lostReportId}` : undefined };
+}
+
+function localChatKey(verificationId: string) {
+  return `findback-chat-${verificationId}`;
+}
+
+export async function loadChatMessages(verificationId: string): Promise<ChatMessage[]> {
+  if (isUuid(verificationId)) {
+    const { data } = await supabase.from("chat_messages").select("id, sender_user_id, body, created_at").eq("verification_id", verificationId).order("created_at", { ascending: true });
+    return (data ?? []).map((row) => ({ id: row.id, senderUserId: row.sender_user_id, body: row.body, createdAt: row.created_at }));
+  }
+  const stored = localStorage.getItem(localChatKey(verificationId));
+  return stored ? JSON.parse(stored) as ChatMessage[] : [];
+}
+
+export async function sendChatMessage(verificationId: string, body: string, senderUserId = "demo-owner"): Promise<ChatMessage | null> {
+  const cleanBody = body.trim();
+  if (!cleanBody) return null;
+  if (isUuid(verificationId)) {
+    const { data } = await supabase.from("chat_messages").insert({ verification_id: verificationId, sender_user_id: senderUserId, body: cleanBody }).select("id, sender_user_id, body, created_at").single();
+    return data ? { id: data.id, senderUserId: data.sender_user_id, body: data.body, createdAt: data.created_at } : null;
+  }
+  const message = { id: `demo-message-${Date.now()}`, senderUserId, body: cleanBody, createdAt: new Date().toISOString() };
+  const messages = await loadChatMessages(verificationId);
+  localStorage.setItem(localChatKey(verificationId), JSON.stringify([...messages, message]));
+  return message;
 }
 
 const synonymGroups = [["macbook", "laptop", "notebook", "computer"], ["charger", "cable", "adapter", "power"], ["earbuds", "airpods", "headphones", "buds"], ["backpack", "rucksack", "bag"], ["black", "dark", "midnight"], ["silver", "grey", "gray", "metallic"]];
