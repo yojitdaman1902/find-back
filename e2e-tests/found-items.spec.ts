@@ -5,7 +5,7 @@ test("browse, search, and open a found item", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Found Items" })).toBeVisible();
   await expect(page.getByText("Black Nike Backpack")).toBeVisible();
-  await expect(page.getByText("31").first()).toBeVisible();
+  await expect(page.getByText("Scientific Calculator", { exact: true })).not.toBeVisible();
 
   await page.getByPlaceholder("Search found items…").fill("backpack");
   await expect(page.getByText("Black Nike Backpack")).toBeVisible();

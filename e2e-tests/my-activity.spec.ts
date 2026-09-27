@@ -39,14 +39,17 @@ test("delete listing from My Activity removes it after refresh", async ({ page }
   await expect(page.getByText("Midnight AirPods Case", { exact: true })).not.toBeVisible();
 });
 
-test("mark a lost report as recovered and persist the status", async ({ page }) => {
+test("mark a lost report as recovered and remove it from active lost reports", async ({ page }) => {
   await page.goto("/dashboard");
   await page.getByRole("button", { name: "Lost reports" }).click();
   await page.getByRole("button", { name: "Actions for Black Nike Backpack" }).click();
   await page.getByRole("button", { name: "Mark as Recovered" }).click();
 
-  await expect(page.getByText("Black Nike Backpack", { exact: true }).locator("..").getByText("Recovered")).toBeVisible();
+  await expect(page.getByText("Black Nike Backpack", { exact: true })).not.toBeVisible();
   await expect(page.getByText("Black Nike Backpack marked as recovered ✓")).toBeVisible();
-  await page.reload();
+  await page.getByRole("button", { name: "Recovered" }).click();
   await expect(page.getByText("Black Nike Backpack", { exact: true }).locator("..").getByText("Recovered")).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Lost reports" }).click();
+  await expect(page.getByText("Black Nike Backpack", { exact: true })).not.toBeVisible();
 });

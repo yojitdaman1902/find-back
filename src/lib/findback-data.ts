@@ -505,8 +505,10 @@ export async function updateReportStatus(id: string, status: ReportStatus) {
   const { data } = await supabase.auth.getSession();
   const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
   if (data.session?.user && isUuid(id)) {
-    const { error } = await supabase.from("reports").update({ status: statusToDb(status) }).eq("id", id).eq("user_id", data.session.user.id);
-    if (error) throw error;
+    const result = status === "Recovered"
+      ? await supabase.rpc("mark_report_recovered", { target_lost_report_id: id })
+      : await supabase.from("reports").update({ status: statusToDb(status) }).eq("id", id).eq("user_id", data.session.user.id);
+    if (result.error) throw result.error;
   }
   const reports = getReports(storageKey, !data.session?.user).map((report) => report.id === id ? { ...report, status } : report);
   saveReports(reports, storageKey);
