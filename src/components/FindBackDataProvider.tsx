@@ -35,7 +35,7 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
     } else {
       const localReports = getReports();
       setReports(localReports);
-      setMatchReports([...demoFoundReports, ...localReports]);
+      setMatchReports([...activeDemoFoundReports, ...localReports]);
     }
   };
 
@@ -70,7 +70,7 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
         const localReports = getReports();
         setProfileName("there");
         setReports(localReports);
-        setMatchReports([...demoFoundReports, ...localReports]);
+        setMatchReports([...activeDemoFoundReports, ...localReports]);
       }
       if (active) setIsLoading(false);
     };
