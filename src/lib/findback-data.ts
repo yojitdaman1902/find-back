@@ -193,7 +193,7 @@ export async function loadReportsForUser(userId: string): Promise<ItemReport[]> 
 }
 
 export async function loadMatchFeatures(): Promise<ItemReport[]> {
-  const { data, error } = await supabase.from("report_match_features").select("report_id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, created_at").order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("report_match_features").select("report_id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, created_at").order("created_at", { ascending: false });
   if (error || !data) return [];
   return data.map((row) => mapReportRow(row, row.report_id));
 }
@@ -504,9 +504,12 @@ export async function deleteReport(id: string) {
 export async function updateReportStatus(id: string, status: ReportStatus) {
   const { data } = await supabase.auth.getSession();
   const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
+  if (data.session?.user && isUuid(id)) {
+    const { error } = await supabase.from("reports").update({ status: statusToDb(status) }).eq("id", id).eq("user_id", data.session.user.id);
+    if (error) throw error;
+  }
   const reports = getReports(storageKey, !data.session?.user).map((report) => report.id === id ? { ...report, status } : report);
   saveReports(reports, storageKey);
-  if (data.session?.user) await supabase.from("reports").update({ status: statusToDb(status) }).eq("id", id).eq("user_id", data.session.user.id);
 }
 
 export function getLatestReport() {
