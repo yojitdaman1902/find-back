@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, LockKeyhole, ShieldCheck } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppShell, GlassCard, PrimaryButton, SecondaryButton } from "@/components/findback-ui";
 import { useFindBackData } from "@/components/FindBackDataProvider";
 import { getBestLostMatchForFound, loadOwnershipQuestions, loadOwnershipVerification, OWNERSHIP_MAX_ATTEMPTS, type OwnershipQuestion, type OwnershipVerificationResult, updateReportStatus, verifyFoundOwnership } from "@/lib/findback-data";
 
 export default function OwnershipVerification() {
   const { foundReportId = "" } = useParams();
+  const [searchParams] = useSearchParams();
+  const linkedLostReportId = searchParams.get("lostReportId");
   const navigate = useNavigate();
   const { reports, sharedReports, isLoading, refreshReports } = useFindBackData();
   const foundReport = useMemo(() => sharedReports.find((report) => report.id === foundReportId), [foundReportId, sharedReports]);
   const lostReports = useMemo(() => reports.filter((report) => report.type === "lost"), [reports]);
   const match = useMemo(() => foundReport ? getBestLostMatchForFound(foundReport, lostReports) : undefined, [foundReport, lostReports]);
-  const lostReport = useMemo(() => match?.targetReportId ? lostReports.find((report) => report.id === match.targetReportId) : undefined, [lostReports, match?.targetReportId]);
+  const lostReport = useMemo(() => {
+    const linkedReport = linkedLostReportId ? lostReports.find((report) => report.id === linkedLostReportId) : undefined;
+    return linkedReport ?? (match?.targetReportId ? lostReports.find((report) => report.id === match.targetReportId) : undefined);
+  }, [linkedLostReportId, lostReports, match?.targetReportId]);
   const [questions, setQuestions] = useState<OwnershipQuestion[]>([]);
   const [answers, setAnswers] = useState<string[]>([]);
   const [checking, setChecking] = useState(false);

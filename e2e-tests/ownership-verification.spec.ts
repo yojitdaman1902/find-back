@@ -6,7 +6,7 @@ test("found item claims go directly to ownership verification", async ({ page })
   await page.getByRole("button", { name: "View details for Black Nike Backpack" }).click();
   await page.getByRole("button", { name: "Prove This Is Mine" }).click();
 
-  await expect(page).toHaveURL(/\/verify-ownership\/catalog-backpack$/);
+  await expect(page).toHaveURL(/\/verify-ownership\/catalog-backpack\?lostReportId=lost-backpack$/);
   await expect(page.getByRole("heading", { name: /Prove this is your Black Nike Backpack/ })).toBeVisible();
   await expect(page.getByText("Potential Matches")).not.toBeVisible();
   await expect(page.getByText("What colour was the keychain attached to your backpack?")).toBeVisible();
