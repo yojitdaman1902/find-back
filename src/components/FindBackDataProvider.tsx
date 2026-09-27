@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { demoFoundReports, getActiveMatches, getPotentialMatchCount, getReports, loadMatchFeatures, loadReportsForUser, type ItemReport, type Match } from "@/lib/findback-data";
+import { demoFoundReports, getActiveMatches, getPotentialMatchCount, getReports, isActiveReport, loadMatchFeatures, loadReportsForUser, type ItemReport, type Match } from "@/lib/findback-data";
 import { useSessionContext } from "@/components/SessionContextProvider";
 
 type FindBackData = {
@@ -12,7 +12,8 @@ type FindBackData = {
   refreshReports: () => Promise<void>;
 };
 
-const FindBackDataContext = createContext<FindBackData>({ reports: [], sharedReports: demoFoundReports, matches: getActiveMatches(), profileName: "there", isLoading: true, refreshReports: async () => {} });
+const activeDemoFoundReports = demoFoundReports.filter(isActiveReport);
+const FindBackDataContext = createContext<FindBackData>({ reports: [], sharedReports: activeDemoFoundReports, matches: getActiveMatches(), profileName: "there", isLoading: true, refreshReports: async () => {} });
 
 function fallbackName(email?: string) {
   return email?.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "there";
@@ -30,7 +31,7 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
     if (userId) {
       const [ownReports, sharedReports] = await Promise.all([loadReportsForUser(userId), loadMatchFeatures()]);
       setReports(ownReports);
-      setMatchReports([...demoFoundReports, ...sharedReports]);
+      setMatchReports([...activeDemoFoundReports, ...sharedReports]);
     } else {
       const localReports = getReports();
       setReports(localReports);
@@ -63,7 +64,7 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
           const [ownReports, sharedReports] = await Promise.all([loadReportsForUser(session.user.id), loadMatchFeatures()]);
           setProfileName(profile?.display_name || derivedName);
           setReports(ownReports);
-          setMatchReports([...demoFoundReports, ...sharedReports]);
+          setMatchReports([...activeDemoFoundReports, ...sharedReports]);
         }
       } else if (active) {
         const localReports = getReports();
@@ -84,7 +85,7 @@ export function FindBackDataProvider({ children }: { children: React.ReactNode }
       const [ownReports, sharedReports] = await Promise.all([loadReportsForUser(userId), loadMatchFeatures()]);
       if (active) {
         setReports(ownReports);
-        setMatchReports([...demoFoundReports, ...sharedReports]);
+        setMatchReports([...activeDemoFoundReports, ...sharedReports]);
       }
     };
     const interval = window.setInterval(refreshSharedReports, 5000);

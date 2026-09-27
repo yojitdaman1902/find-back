@@ -47,8 +47,14 @@ test("mark a lost report as recovered and remove it from active lost reports", a
 
   await expect(page.getByText("Black Nike Backpack", { exact: true })).not.toBeVisible();
   await expect(page.getByText("Black Nike Backpack marked as recovered ✓")).toBeVisible();
+  await page.goto("/matches");
+  await expect(page.getByRole("heading", { name: "No active matches" })).toBeVisible();
+  await page.goto("/dashboard");
   await page.getByRole("button", { name: "Recovered" }).click();
   await expect(page.getByText("Black Nike Backpack", { exact: true }).locator("..").getByText("Recovered")).toBeVisible();
+  await page.getByText("Black Nike Backpack", { exact: true }).locator("..").locator("..").locator("..").getByRole("button", { name: "View History" }).click();
+  await expect(page.getByRole("dialog", { name: "Black Nike Backpack" })).toBeVisible();
+  await page.getByText("Close history", { exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name: "Lost reports" }).click();
   await expect(page.getByText("Black Nike Backpack", { exact: true })).not.toBeVisible();

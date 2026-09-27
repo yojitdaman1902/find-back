@@ -3,6 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 export type ReportType = "lost" | "found";
 export type ReportStatus = "Reported" | "Potential Match" | "Ownership Verification Pending" | "Verified" | "Ownership Verified" | "Recovered";
 
+const ACTIVE_REPORT_STATUS_DB_VALUES = ["reported", "potential_match", "ownership_verification_pending", "verified", "ownership_verified"] as const;
+const ACTIVE_REPORT_STATUSES: ReportStatus[] = ["Reported", "Potential Match", "Ownership Verification Pending", "Verified", "Ownership Verified"];
+
 export type OwnershipClue = {
   question: string;
   answer: string;
@@ -55,7 +58,12 @@ export type ItemReport = {
   publicDescription?: string;
   finderFirstName?: string;
   updatedAt?: string;
+  recoveredAt?: string;
 };
+
+export function isActiveReport(report: Pick<ItemReport, "status">) {
+  return ACTIVE_REPORT_STATUSES.includes(report.status);
+}
 
 export type Match = {
   id: string;
@@ -130,7 +138,7 @@ export const demoMatches: Match[] = [
 const demoReports: ItemReport[] = [
   { id: "lost-backpack", type: "lost", itemName: "Black Nike Backpack", category: "Bags", brand: "Nike", color: "Black", description: "Black Nike backpack with a red keychain and a laptop charger inside.", location: "Library — 2nd Floor", date: "25 Sept", time: "3:15 PM", images: [itemImages.backpack], status: "Ownership Verification Pending", ownershipVerification: [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }] },
   { id: "found-earbuds", type: "found", itemName: "Midnight AirPods Case", category: "Electronics", color: "Midnight blue", description: "Small wireless earbuds case found beside the charging station.", location: "Student Union — Atrium", date: "24 Sept", time: "12:18 PM", images: [itemImages.earbuds], status: "Reported" },
-  { id: "found-notebook", type: "found", itemName: "Navy Lecture Notebook", category: "Books", color: "Navy", description: "Navy notebook with handwritten economics notes and a silver elastic.", location: "Science Hall — Room 204", date: "23 Sept", time: "5:06 PM", images: [itemImages.notebook], status: "Recovered" },
+  { id: "found-notebook", type: "found", itemName: "Navy Lecture Notebook", category: "Books", color: "Navy", description: "Navy notebook with handwritten economics notes and a silver elastic.", location: "Science Hall — Room 204", date: "23 Sept", time: "5:06 PM", images: [itemImages.notebook], status: "Recovered", recoveredAt: "2025-09-27T10:30:00.000Z" },
 ];
 
 export const demoFoundReports: ItemReport[] = [
@@ -142,7 +150,7 @@ export const demoFoundReports: ItemReport[] = [
   { id: "catalog-charger", type: "found", itemName: "USB-C Charger", category: "Electronics", color: "White", description: "65W USB-C laptop charger with a braided cable.", publicDescription: "USB-C charger found in the Computer Lab.", location: "Computer Lab — Desk 18", date: "24 Sept", time: "2:54 PM", images: ["https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=900&q=85"], status: "Reported", finderFirstName: "Leah" },
   { id: "catalog-wallet", type: "found", itemName: "Brown Leather Wallet", category: "Accessories", color: "Brown", description: "Brown leather wallet with private contents held securely by the finder.", publicDescription: "Brown leather wallet found near the Library.", location: "Library — Reading Garden", date: "23 Sept", time: "1:36 PM", images: ["https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=900&q=85"], status: "Potential Match", finderFirstName: "Sam" },
   { id: "catalog-keys", type: "found", itemName: "Set of Keys", category: "Keys", color: "Silver", description: "Small silver keyring with three keys and a fabric tag.", publicDescription: "Set of keys found near the Hostel Block.", location: "Hostel Block — Common Room", date: "22 Sept", time: "8:46 PM", images: [itemImages.keys], status: "Reported", finderFirstName: "Aarav" },
-  { id: "catalog-calculator", type: "found", itemName: "Scientific Calculator", category: "Electronics", color: "Black", description: "Black scientific calculator found beneath a classroom desk.", publicDescription: "Scientific calculator found in the Classroom Block.", location: "Classroom Block — Room 108", date: "22 Sept", time: "12:22 PM", images: ["https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=85"], status: "Recovered", finderFirstName: "Priya" },
+  { id: "catalog-calculator", type: "found", itemName: "Scientific Calculator", category: "Electronics", color: "Black", description: "Black scientific calculator found beneath a classroom desk.", publicDescription: "Scientific calculator found in the Classroom Block.", location: "Classroom Block — Room 108", date: "22 Sept", time: "12:22 PM", images: ["https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=85"], status: "Recovered", recoveredAt: "2025-09-27T10:30:00.000Z", finderFirstName: "Priya" },
   { id: "catalog-phone", type: "found", itemName: "Samsung Galaxy Phone", category: "Electronics", color: "Graphite", description: "Graphite Samsung Galaxy phone found at the Canteen help desk.", publicDescription: "Graphite smartphone found at the Canteen help desk.", location: "Canteen — Help Desk", date: "21 Sept", time: "7:15 PM", images: ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=85"], status: "Potential Match", finderFirstName: "Ishaan" },
 ];
 
@@ -176,11 +184,12 @@ function mapReportRow(row: any, id = row.id): ItemReport {
     publicDescription: row.public_description ?? undefined,
     finderFirstName: row.finder_first_name ?? undefined,
     updatedAt: row.updated_at ?? undefined,
+    recoveredAt: row.recovered_at ?? undefined,
   };
 }
 
 export async function loadReportsForUser(userId: string): Promise<ItemReport[]> {
-  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, created_at, updated_at").eq("user_id", userId).order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, recovered_at, created_at, updated_at").eq("user_id", userId).order("created_at", { ascending: false });
   if (error || !data) return getReports(`findback-reports-${userId}`, false);
   const { data: clueRows } = await supabase.from("ownership_verification_clues").select("report_id, question, answer, position").eq("owner_user_id", userId).order("position", { ascending: true });
   const cluesByReport = new Map<string, OwnershipClue[]>();
@@ -193,7 +202,7 @@ export async function loadReportsForUser(userId: string): Promise<ItemReport[]> 
 }
 
 export async function loadMatchFeatures(): Promise<ItemReport[]> {
-  const { data, error } = await supabase.from("report_match_features").select("report_id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, created_at").order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("report_match_features").select("report_id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, recovered_at, created_at").in("status", ACTIVE_REPORT_STATUS_DB_VALUES).order("created_at", { ascending: false });
   if (error || !data) return [];
   return data.map((row) => mapReportRow(row, row.report_id));
 }
@@ -352,24 +361,32 @@ function buildDynamicMatch(target: ItemReport, candidate: ItemReport): Match {
 }
 
 export function getActiveMatches(reports?: ItemReport[], comparisonReports?: ItemReport[]) {
-  const sourceReports = reports ?? getReports().filter((report) => report.id.startsWith("report-"));
-  const candidates = comparisonReports ?? sourceReports;
+  const allSourceReports = reports ?? getReports();
+  const sourceReports = allSourceReports.filter(isActiveReport);
+  const allCandidates = comparisonReports ?? allSourceReports;
+  const candidates = allCandidates.filter(isActiveReport);
   const target = sourceReports[0];
-  if (!target) return demoMatches;
-  const dynamicMatches = candidates.filter((report) => report.id !== target.id && report.type !== target.type).map((report) => buildDynamicMatch(target, report)).sort((left, right) => right.score - left.score);
-  return dynamicMatches.length ? [...dynamicMatches, ...demoMatches].slice(0, 3) : demoMatches;
+  if (!target) return allSourceReports.length ? [] : demoMatches;
+  return candidates.filter((report) => report.id !== target.id && report.type !== target.type).map((report) => buildDynamicMatch(target, report)).sort((left, right) => right.score - left.score).slice(0, 3);
 }
 
 export function getMatchById(id: string, reports?: ItemReport[], comparisonReports?: ItemReport[]) {
-  return getActiveMatches(reports, comparisonReports).find((match) => match.id === id) ?? demoMatches.find((match) => match.id === id) ?? demoMatches[0];
+  const allSourceReports = reports ?? getReports();
+  const activeMatches = getActiveMatches(reports, comparisonReports);
+  const match = activeMatches.find((candidate) => candidate.id === id);
+  if (match) return match;
+  if (allSourceReports.length) return undefined;
+  return demoMatches.find((candidate) => candidate.id === id) ?? demoMatches[0];
 }
 
 export function getPotentialMatchCount(report: ItemReport, candidates: ItemReport[]) {
-  return candidates.filter((candidate) => candidate.id !== report.id && candidate.type !== report.type).map((candidate) => buildDynamicMatch(report, candidate)).filter((match) => match.score >= 60).length;
+  if (!isActiveReport(report)) return 0;
+  return candidates.filter((candidate) => isActiveReport(candidate) && candidate.id !== report.id && candidate.type !== report.type).map((candidate) => buildDynamicMatch(report, candidate)).filter((match) => match.score >= 60).length;
 }
 
 export function getBestLostMatchForFound(foundReport: ItemReport, lostReports: ItemReport[]) {
-  return lostReports.filter((report) => report.type === "lost").map((report) => buildDynamicMatch(report, foundReport)).sort((left, right) => right.score - left.score)[0];
+  if (!isActiveReport(foundReport)) return undefined;
+  return lostReports.filter((report) => isActiveReport(report) && report.type === "lost").map((report) => buildDynamicMatch(report, foundReport)).sort((left, right) => right.score - left.score)[0];
 }
 
 export function getPublicFoundDescription(report: ItemReport) {
@@ -429,7 +446,7 @@ export async function saveReport(report: ItemReport) {
   const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
   const reports = getReports(storageKey, !data.session?.user);
   const sharedReports = data.session?.user ? await loadMatchFeatures() : [];
-  const oppositeUserReports = [...reports, ...sharedReports].filter((existing, index, all) => existing.type !== report.type && all.findIndex((candidate) => candidate.id === existing.id) === index);
+  const oppositeUserReports = [...reports, ...sharedReports].filter((existing, index, all) => isActiveReport(existing) && existing.type !== report.type && all.findIndex((candidate) => candidate.id === existing.id) === index);
   const status = oppositeUserReports.length && report.type === "lost" ? "Ownership Verification Pending" as ReportStatus : oppositeUserReports.length ? "Potential Match" as ReportStatus : report.status;
   let finderFirstName = report.finderFirstName;
   if (report.type === "found" && data.session?.user && !finderFirstName) {
@@ -473,7 +490,7 @@ export async function updateReport(report: ItemReport, previousReport: ItemRepor
   const { data } = await supabase.auth.getSession();
   const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
   const matchRelevantChanged = report.itemName !== previousReport.itemName || report.category !== previousReport.category || report.brand !== previousReport.brand || report.color !== previousReport.color || report.description !== previousReport.description || report.location !== previousReport.location || report.date !== previousReport.date || report.time !== previousReport.time || JSON.stringify(report.images) !== JSON.stringify(previousReport.images);
-  const nextStatus = matchRelevantChanged ? "Reported" as ReportStatus : report.status;
+  const nextStatus = previousReport.status === "Recovered" ? "Recovered" as ReportStatus : matchRelevantChanged ? "Reported" as ReportStatus : report.status;
   const updatedReport = { ...report, status: nextStatus, publicDescription: report.type === "found" ? getPublicFoundDescription(report) : report.publicDescription };
 
   if (data.session?.user && isUuid(report.id)) {
@@ -506,12 +523,21 @@ export async function updateReportStatus(id: string, status: ReportStatus) {
   const storageKey = data.session?.user ? `findback-reports-${data.session.user.id}` : "findback-reports";
   if (data.session?.user && isUuid(id)) {
     const result = status === "Recovered"
-      ? await supabase.rpc("mark_report_recovered", { target_lost_report_id: id })
+      ? await supabase.rpc("mark_report_recovered", { target_report_id: id })
       : await supabase.from("reports").update({ status: statusToDb(status) }).eq("id", id).eq("user_id", data.session.user.id);
     if (result.error) throw result.error;
   }
-  const reports = getReports(storageKey, !data.session?.user).map((report) => report.id === id ? { ...report, status } : report);
-  saveReports(reports, storageKey);
+  const reports = getReports(storageKey, !data.session?.user);
+  const target = reports.find((report) => report.id === id);
+  const recoveredIds = new Set([id]);
+  if (status === "Recovered" && target?.type === "lost") {
+    reports.forEach((report) => {
+      const sameItem = report.type === "found" && report.itemName.trim().toLowerCase() === target.itemName.trim().toLowerCase() && report.category.trim().toLowerCase() === target.category.trim().toLowerCase() && report.color.trim().toLowerCase() === target.color.trim().toLowerCase() && (!target.brand || !report.brand || report.brand.trim().toLowerCase() === target.brand.trim().toLowerCase());
+      if (sameItem) recoveredIds.add(report.id);
+    });
+  }
+  const recoveredAt = status === "Recovered" ? new Date().toISOString() : undefined;
+  saveReports(reports.map((report) => recoveredIds.has(report.id) ? { ...report, status, recoveredAt: recoveredAt ?? report.recoveredAt } : report), storageKey);
 }
 
 export function getLatestReport() {
