@@ -400,7 +400,7 @@ export function getPublicFoundDescription(report: ItemReport) {
 export const OWNERSHIP_MAX_ATTEMPTS = 3;
 
 export function normalizeVerificationAnswer(value: string) {
-  return value.toLowerCase().replace(/\+/g, " and ").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return value.toLowerCase().replace(/[&+]/g, " and ").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function editDistance(left: string, right: string) {
