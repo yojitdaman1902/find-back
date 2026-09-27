@@ -3,26 +3,33 @@ import { ArrowLeft, Check, ChevronRight, LockKeyhole, MapPin, MessageCircle, Ref
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AppShell, Eyebrow, GlassCard, MatchScore, PrimaryButton, SecondaryButton, StatusPill } from "@/components/findback-ui";
 import { useFindBackData } from "@/components/FindBackDataProvider";
-import { getMatchById, getReports, loadChatMessages, loadOwnershipQuestions, loadOwnershipVerification, OWNERSHIP_MAX_ATTEMPTS, sendChatMessage, type ChatMessage, type OwnershipQuestion, type OwnershipVerificationResult, updateReportStatus, verifyFoundOwnership } from "@/lib/findback-data";
+import { getMatchById, getReports, loadChatMessages, loadOwnershipQuestions, loadOwnershipVerification, OWNERSHIP_MAX_ATTEMPTS, sendChatMessage, type ChatMessage, type OwnershipAnswer, type OwnershipQuestion, type OwnershipVerificationResult, updateReportStatus, verifyFoundOwnership } from "@/lib/findback-data";
 import { useSessionContext } from "@/components/SessionContextProvider";
 
-function VerificationPanel({ questions, onVerify }: { questions: OwnershipQuestion[]; onVerify: (answers: string[]) => Promise<OwnershipVerificationResult> }) {
-  const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ""));
+function VerificationPanel({ questions, onVerify }: { questions: OwnershipQuestion[]; onVerify: (answers: OwnershipAnswer[]) => Promise<OwnershipVerificationResult> }) {
+  const [answers, setAnswers] = useState<Record<string, string>>(() => Object.fromEntries(questions.map((question) => [question.id, ""])));
   const [attempts, setAttempts] = useState(0);
   const [failed, setFailed] = useState(false);
   const [locked, setLocked] = useState(false);
   const [checking, setChecking] = useState(false);
+  useEffect(() => {
+    setAnswers(Object.fromEntries(questions.map((question) => [question.id, ""])));
+    setAttempts(0);
+    setFailed(false);
+    setLocked(false);
+  }, [questions]);
   const submit = async () => {
     if (locked || checking) return;
     setChecking(true);
-    const result = await onVerify(answers);
+    const submittedAnswers = questions.map((question) => ({ questionId: question.id, answer: answers[question.id] ?? "" }));
+    const result = await onVerify(submittedAnswers);
     setAttempts((current) => current + 1);
     setLocked(result.locked);
     setFailed(!result.verified);
     setChecking(false);
   };
   const blocked = locked || attempts >= OWNERSHIP_MAX_ATTEMPTS;
-  return <GlassCard className="sticky top-8 overflow-hidden border-purple-300/20"><div className="border-b border-white/[0.08] bg-purple-300/[0.07] p-6 sm:p-8"><div className="grid size-12 place-items-center rounded-2xl border border-purple-300/20 bg-purple-300/10 text-purple-200"><LockKeyhole className="size-5" /></div><p className="mt-6 text-xs font-semibold uppercase tracking-[0.17em] text-purple-200">Ownership verification</p><h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Prove this is your item</h2><p className="mt-3 text-sm leading-6 text-slate-400">The finder added private questions. Answer them using the information only the rightful owner should know.</p></div><div className="space-y-4 p-6 sm:p-8">{questions.map((question, index) => <label key={`${question.position}-${index}`} className="block"><span className="mb-2 block text-sm font-medium leading-6 text-slate-200">Question {index + 1}: {question.question}</span><input aria-label={`Question ${index + 1}: ${question.question}`} value={answers[index] ?? ""} disabled={blocked || checking} onChange={(event) => { const next = [...answers]; next[index] = event.target.value; setAnswers(next); setFailed(false); }} placeholder="Your answer" className="field-input" /></label>)}{failed && <div className="rounded-2xl border border-rose-300/20 bg-rose-300/[0.07] p-4"><p className="text-sm font-semibold text-rose-200">Ownership could not be verified.</p><p className="mt-1 text-xs leading-5 text-rose-100/60">Some answers didn’t match the finder’s private details. We won’t reveal which ones.</p><button type="button" onClick={() => { setFailed(false); setAnswers(questions.map(() => "")); }} className="mt-3 text-xs font-semibold text-rose-200 transition hover:text-white">Try Again</button></div>}{blocked && <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-4"><p className="text-sm font-semibold text-amber-100">Verification attempts paused.</p><p className="mt-1 text-xs leading-5 text-amber-100/60">For everyone’s safety, this check locks after {OWNERSHIP_MAX_ATTEMPTS} unsuccessful attempts.</p></div>}<PrimaryButton disabled={blocked || checking || answers.length !== questions.length || answers.some((answer) => !answer.trim())} onClick={submit} className="mt-2 w-full">{checking ? "Checking privately…" : "Prove Ownership"} <ShieldCheck className="size-4" /></PrimaryButton><p className="text-center text-xs leading-5 text-slate-600">Answers are checked privately and never shown on the public found item.</p></div></GlassCard>;
+  return <GlassCard className="sticky top-8 overflow-hidden border-purple-300/20"><div className="border-b border-white/[0.08] bg-purple-300/[0.07] p-6 sm:p-8"><div className="grid size-12 place-items-center rounded-2xl border border-purple-300/20 bg-purple-300/10 text-purple-200"><LockKeyhole className="size-5" /></div><p className="mt-6 text-xs font-semibold uppercase tracking-[0.17em] text-purple-200">Ownership verification</p><h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Prove this is your item</h2><p className="mt-3 text-sm leading-6 text-slate-400">The finder added private questions. Answer them using the information only the rightful owner should know.</p></div><div className="space-y-4 p-6 sm:p-8">{questions.map((question, index) => <label key={question.id} className="block"><span className="mb-2 block text-sm font-medium leading-6 text-slate-200">Question {index + 1}: {question.question}</span><input aria-label={`Question ${index + 1}: ${question.question}`} value={answers[question.id] ?? ""} disabled={blocked || checking} onChange={(event) => { setAnswers((current) => ({ ...current, [question.id]: event.target.value })); setFailed(false); }} placeholder="Your answer" className="field-input" /></label>)}{failed && <div className="rounded-2xl border border-rose-300/20 bg-rose-300/[0.07] p-4"><p className="text-sm font-semibold text-rose-200">Ownership could not be verified.</p><p className="mt-1 text-xs leading-5 text-rose-100/60">Some answers didn’t match the finder’s private details. We won’t reveal which ones.</p><button type="button" onClick={() => { setFailed(false); setAnswers(Object.fromEntries(questions.map((question) => [question.id, ""]))); }} className="mt-3 text-xs font-semibold text-rose-200 transition hover:text-white">Try Again</button></div>}{blocked && <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-4"><p className="text-sm font-semibold text-amber-100">Verification attempts paused.</p><p className="mt-1 text-xs leading-5 text-amber-100/60">For everyone’s safety, this check locks after {OWNERSHIP_MAX_ATTEMPTS} unsuccessful attempts.</p></div>}<PrimaryButton disabled={blocked || checking || questions.some((question) => !(answers[question.id] ?? "").trim())} onClick={submit} className="mt-2 w-full">{checking ? "Checking privately…" : "Prove Ownership"} <ShieldCheck className="size-4" /></PrimaryButton><p className="text-center text-xs leading-5 text-slate-600">Answers are checked privately and never shown on the public found item.</p></div></GlassCard>;
 }
 
 function ChatPanel({ verificationId, finderName, onClose }: { verificationId: string; finderName: string; onClose: () => void }) {
@@ -48,8 +55,7 @@ export default function MatchDetail() {
   const navigate = useNavigate();
   const { reports, matches, refreshReports } = useFindBackData();
   const match = matches.find((item) => item.id === matchId) ?? getMatchById(matchId, reports);
-  const fallbackLost = getReports().find((report) => report.type === "lost" && report.status !== "Recovered");
-  const lost = match ? reports.find((report) => report.id === match.targetReportId) ?? reports.find((report) => report.type === "lost" && report.status !== "Recovered") ?? fallbackLost : undefined;
+  const lost = match?.targetReportId ? reports.find((report) => report.id === match.targetReportId) ?? getReports().find((report) => report.id === match.targetReportId) : undefined;
   const foundReportId = match?.candidateReportId ?? (match?.id === "match-backpack" ? "catalog-backpack" : undefined);
   const [questions, setQuestions] = useState<OwnershipQuestion[]>([]);
   const [verified, setVerified] = useState(lost?.status === "Ownership Verified" || lost?.status === "Verified");
@@ -59,13 +65,23 @@ export default function MatchDetail() {
   const finderName = match?.finderFirstName ?? "the finder";
 
   useEffect(() => {
-    if (!foundReportId) return;
-    if (lost?.id) loadOwnershipQuestions(foundReportId, lost.id).then(setQuestions);
-    if (lost?.id) loadOwnershipVerification(foundReportId, lost.id).then((verification) => { if (verification?.id) { setVerificationId(verification.id); setVerified(true); } });
+    setQuestions([]);
+    setVerificationId(null);
+    setVerified(lost?.status === "Ownership Verified" || lost?.status === "Verified");
+    if (!foundReportId || !lost?.id) return;
+    let active = true;
+    loadOwnershipQuestions(foundReportId, lost.id).then((loaded) => { if (active) setQuestions(loaded); });
+    loadOwnershipVerification(foundReportId, lost.id).then((verification) => {
+      if (active && verification?.id) {
+        setVerificationId(verification.id);
+        setVerified(true);
+      }
+    });
+    return () => { active = false; };
   }, [foundReportId, lost?.id]);
   useEffect(() => { setRecovered(lost?.status === "Recovered"); }, [lost]);
 
-  const verifyAnswers = async (answers: string[]) => {
+  const verifyAnswers = async (answers: OwnershipAnswer[]) => {
     if (!foundReportId || !lost?.id) return { verified: false, locked: true, attemptsRemaining: 0 };
     const result = await verifyFoundOwnership(foundReportId, lost.id, answers);
     if (result.verified) {

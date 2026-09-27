@@ -12,6 +12,16 @@ test("found item claims go directly to ownership verification", async ({ page })
   await expect(page.getByText("What colour was the keychain attached to your backpack?")).toBeVisible();
 });
 
+test("exact ownership answers pass", async ({ page }) => {
+  await page.goto("/verify-ownership/catalog-backpack");
+
+  await page.getByLabel(/Question 1:/).fill("Red");
+  await page.getByLabel(/Question 2:/).fill("MacBook charger and notebook");
+  await page.getByRole("button", { name: "Verify Ownership" }).click();
+
+  await expect(page.getByText("✅ Ownership Verified")).toBeVisible();
+});
+
 test("correct ownership answers pass with harmless formatting differences", async ({ page }) => {
   await page.goto("/verify-ownership/catalog-backpack");
 

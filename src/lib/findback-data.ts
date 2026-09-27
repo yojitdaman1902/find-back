@@ -7,13 +7,20 @@ const ACTIVE_REPORT_STATUS_DB_VALUES = ["reported", "potential_match", "ownershi
 const ACTIVE_REPORT_STATUSES: ReportStatus[] = ["Reported", "Potential Match", "Ownership Verification Pending", "Verified", "Ownership Verified"];
 
 export type OwnershipClue = {
+  id?: string;
   question: string;
   answer: string;
 };
 
 export type OwnershipQuestion = {
+  id: string;
   position: number;
   question: string;
+};
+
+export type OwnershipAnswer = {
+  questionId: string;
+  answer: string;
 };
 
 export type OwnershipVerificationResult = {
@@ -191,11 +198,11 @@ function mapReportRow(row: any, id = row.id): ItemReport {
 export async function loadReportsForUser(userId: string): Promise<ItemReport[]> {
   const { data, error } = await supabase.from("reports").select("id, report_type, item_name, category, brand, color, description, public_description, finder_first_name, location, reported_date, reported_time, images, status, recovered_at, created_at, updated_at").eq("user_id", userId).order("created_at", { ascending: false });
   if (error || !data) return getReports(`findback-reports-${userId}`, false);
-  const { data: clueRows } = await supabase.from("ownership_verification_clues").select("report_id, question, answer, position").eq("owner_user_id", userId).order("position", { ascending: true });
+  const { data: clueRows } = await supabase.from("ownership_verification_clues").select("id, report_id, question, answer, position").eq("owner_user_id", userId).order("position", { ascending: true });
   const cluesByReport = new Map<string, OwnershipClue[]>();
   (clueRows ?? []).forEach((row) => {
     const clues = cluesByReport.get(row.report_id) ?? [];
-    clues.push({ question: row.question, answer: row.answer });
+    clues.push({ id: row.id, question: row.question, answer: row.answer });
     cluesByReport.set(row.report_id, clues);
   });
   return data.map((row) => ({ ...mapReportRow(row), ownershipVerification: cluesByReport.get(row.id) ?? [] }));
@@ -219,13 +226,22 @@ const demoVerificationClues: Record<string, OwnershipClue[]> = {
   "catalog-backpack": [{ question: "What colour was the keychain attached to your backpack?", answer: "Red" }, { question: "What was inside the backpack?", answer: "MacBook charger and notebook" }],
 };
 
+function localOwnershipQuestionId(foundReportId: string, position: number) {
+  return `${foundReportId}-clue-${position}`;
+}
+
+function localOwnershipClues(foundReportId: string) {
+  const clues = demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? [];
+  return clues.map((clue, position) => ({ ...clue, id: clue.id ?? localOwnershipQuestionId(foundReportId, position) }));
+}
+
 export async function loadOwnershipQuestions(foundReportId: string, lostReportId: string): Promise<OwnershipQuestion[]> {
   if (isUuid(foundReportId) && isUuid(lostReportId)) {
     const { data, error } = await supabase.rpc("get_ownership_questions", { target_found_report_id: foundReportId, target_lost_report_id: lostReportId });
     if (error || !data) return [];
-    return data.map((row: { clue_position: number; question: string }) => ({ position: row.clue_position, question: row.question }));
+    return data.map((row: { clue_id: string; clue_position: number; question: string }) => ({ id: row.clue_id, position: row.clue_position, question: row.question }));
   }
-  return (demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? []).map((clue, position) => ({ position, question: clue.question }));
+  return localOwnershipClues(foundReportId).map((clue, position) => ({ id: clue.id ?? localOwnershipQuestionId(foundReportId, position), position, question: clue.question }));
 }
 
 export async function loadOwnershipVerification(foundReportId: string, lostReportId: string) {
@@ -236,14 +252,13 @@ export async function loadOwnershipVerification(foundReportId: string, lostRepor
   return null;
 }
 
-export async function verifyFoundOwnership(foundReportId: string, lostReportId: string, answers: string[]): Promise<OwnershipVerificationResult> {
+export async function verifyFoundOwnership(foundReportId: string, lostReportId: string, answers: OwnershipAnswer[]): Promise<OwnershipVerificationResult> {
   if (isUuid(foundReportId) && isUuid(lostReportId)) {
     const { data, error } = await supabase.rpc("verify_found_ownership", { target_found_report_id: foundReportId, target_lost_report_id: lostReportId, submitted_answers: answers });
     if (error || !data) return { verified: false, locked: false, attemptsRemaining: 0 };
     return { verified: Boolean(data.verified), locked: Boolean(data.locked), attemptsRemaining: Number(data.attempts_remaining ?? 0), verificationId: data.verification_id ?? undefined };
   }
-  const clues = demoVerificationClues[foundReportId] ?? localReportById(foundReportId)?.ownershipVerification ?? [];
-  const result = verifyOwnership(clues, answers);
+  const result = verifyOwnership(localOwnershipClues(foundReportId), answers);
   return { verified: result.verified, locked: false, attemptsRemaining: result.verified ? OWNERSHIP_MAX_ATTEMPTS : Math.max(0, OWNERSHIP_MAX_ATTEMPTS - 1), verificationId: result.verified ? `demo-verification-${foundReportId}-${lostReportId}` : undefined };
 }
 
@@ -431,9 +446,13 @@ function answersMatch(expected: string, actual: string) {
   return tokenCoverage >= 0.75 || (Math.min(compactExpected.length, compactActual.length) >= 5 && similarity >= 0.9);
 }
 
-export function verifyOwnership(clues: OwnershipClue[], answers: string[]) {
+export function verifyOwnership(clues: OwnershipClue[], answers: OwnershipAnswer[]) {
   const required = Math.max(2, Math.ceil(clues.length * 2 / 3));
-  const correct = clues.reduce((total, clue, index) => total + (answersMatch(clue.answer, answers[index] ?? "") ? 1 : 0), 0);
+  const correct = clues.reduce((total, clue, index) => {
+    const questionId = clue.id ?? `clue-${index}`;
+    const submittedAnswer = answers.find((answer) => answer.questionId === questionId)?.answer ?? "";
+    return total + (answersMatch(clue.answer, submittedAnswer) ? 1 : 0);
+  }, 0);
   return { correct, total: clues.length, required, verified: clues.length >= 2 && correct >= required };
 }
 
